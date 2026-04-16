@@ -1,0 +1,10 @@
+.DS_Store
+
+# Local Claude Code state
+.claude/
+
+# SwiftPM
+NotchyPrompter/.build/
+NotchyPrompter/.swiftpm/
+NotchyPrompter/NotchyPrompter.app/
+# Package.resolved is committed so everyone gets the same dependency versions.
