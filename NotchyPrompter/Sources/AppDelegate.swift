@@ -38,6 +38,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                          sessionRecorder: sessionRecorder)
         self.pipeline = p
 
+        let s = self.store
+        let r = self.sessionRecorder
+        p.postSessionHook = { session in
+            guard s.autoSummarizeOnStop else { return }
+            guard let client = s.buildClient() else { return }
+            let gen = SummaryGenerator(client: client)
+            do {
+                let text = try await gen.run(prompt: s.summaryPrompt, session: session)
+                try r.appendSummary(sessionID: session.id,
+                                    prompt: s.summaryPrompt, text: text)
+            } catch {
+                NSLog("summary error: \(error.localizedDescription)")
+            }
+        }
+
         if store.activeModeID == nil {
             store.activeModeID = modeStore.watchingBuiltIn.id
         }
