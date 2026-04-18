@@ -13,9 +13,16 @@ struct ModeDefaults: Codable, Equatable {
 /// - `debounce(seconds:)`: accumulate chunks into a paragraph, fire once
 ///   after the speaker has been silent for the given duration. Suited to
 ///   note-taking or recap modes where per-sentence output is too chatty.
+/// - `silent`: never fire the LLM during the session. Transcript is still
+///   recorded, and the live transcript is routed to the overlay so the
+///   user sees what's being captured. A single post-hoc summary fires on
+///   Stop via `autoSummarizeOnStop`. This is the Note-taker default —
+///   per-chunk firing produced redundant per-fragment paraphrases because
+///   the LLM never saw the arc.
 enum FireCadence: Codable, Equatable {
     case immediate
     case debounce(seconds: Double)
+    case silent
 }
 
 struct Mode: Codable, Identifiable, Equatable {
@@ -48,12 +55,19 @@ struct Mode: Codable, Identifiable, Equatable {
         return copy
     }
 
-    /// The cadence actually used at runtime. Falls back to Note-taker's
-    /// paragraph-debounce default when no explicit cadence is set, so
-    /// modes.json written by older versions get the new behaviour for free.
+    /// The cadence actually used at runtime.
+    ///
+    /// Note-taker is always `.silent` regardless of the stored `fireCadence`
+    /// value — gated on `defaults.name` so user renames don't break the rule.
+    /// This overrides any legacy stored cadence (e.g. the v0.2.1 `.debounce(2.0)`
+    /// seed) without a modes.json migration, so existing installs pick up the
+    /// transcript-primary behaviour on upgrade.
+    ///
+    /// For other modes, the stored value wins if set; otherwise default to
+    /// `.immediate` (the v0.2 behaviour).
     var effectiveFireCadence: FireCadence {
+        if defaults?.name == "Note-taker" { return .silent }
         if let c = fireCadence { return c }
-        if name == "Note-taker" { return .debounce(seconds: 2.0) }
         return .immediate
     }
 

@@ -9,7 +9,32 @@ Per-task plans. Claude writes here **before** implementing; user verifies before
 - Add a `## Review` subsection under the task when finished: outcome, unexpected findings, anything that should go into `lessons.md`.
 - Old completed plans can be deleted; git history preserves them.
 
-## Current plan — 2026-04-18: Filter trivia + broaden attribution stripper
+## Current plan — 2026-04-18: Note-taker = transcript-primary + recap on Stop
+
+Triggered by session `sessions/2026-04-18-112714.log`: Note-taker fired 7 LLM calls on 90 s of single-speaker monologue about Goose + Qwen 3 Coder, producing 17 redundant bullets. Qwen never sees the arc — only the current paragraph — so the "notes" are actually per-fragment paraphrases.
+
+Reshape: Note-taker records the transcript live (nothing fires during the session), and the existing `autoSummarizeOnStop` hook produces one coherent recap over the full transcript on Stop.
+
+- [x] Add `FireCadence.silent` case — means "record, don't fire LLM per chunk"
+- [x] Default Note-taker's `effectiveFireCadence` to `.silent` (was `.debounce(2.0)`). Gated on `defaults.name` so user renames don't break it; stored value is overridden, so legacy `modes.json` with `.debounce(2.0)` pick up the new behaviour without a migration.
+- [x] `Pipeline.dispatchChunk` `.silent` branch: routes transcript to `vm.setResponse`; transcript already persisted by `sessionRecorder.recordTranscript` upstream.
+- [x] Retune `SeedData.summaryPrompt` default for video/talk recap.
+- [x] Unit tests: Note-taker resolves to `.silent` even when stored cadence is `.debounce(2.0)` (2 new tests in `ModeStoreTests`).
+- [x] `swift test` (39/39) + `swift build -c release` green.
+- [ ] Rebuild `.app`, launch, run a 30–60 s session — live log shows transcript only during the run, `[summary]` block appended on Stop.
+
+### Review
+
+**Outcome:** Pivoted Note-taker to transcript-primary behaviour. One `.silent` case added to `FireCadence`, one branch added to `Pipeline.dispatchChunk`, updated seed + runtime fallback, reworked the summary prompt for generic recaps. 39/39 tests pass.
+
+**Unexpected findings:**
+- `ModeStore` already has a non-trivial migration path (legacy `Watching` → `Note-taker`). Rather than add another migration pass for the stored cadence, chose to override in `effectiveFireCadence` based on `defaults.name`. Zero migration, no modes.json rewrite.
+- `OverlayViewModel.setResponse` has a 9s auto-hide. For transcript streaming that's fine (each chunk resets the timer); if a speaker pauses for > 9s the overlay fades until the next chunk. No action needed unless UX feedback says otherwise.
+
+**Into lessons.md:**
+- When a built-in's default behaviour changes, prefer a runtime override in a computed property over a persisted-state migration — simpler, reversible, and doesn't touch disk.
+
+## Completed — 2026-04-18: Filter trivia + broaden attribution stripper
 
 Triggered by a live session (`sessions/2026-04-18-105531.log`) where `*Wheat*`, `*Wheep*`, `Thank you.` all slipped through to the LLM, and where `AttributionStripper` failed to catch bullets starting with "Speaker advises…" / "User claims…" (regex required a leading "The").
 

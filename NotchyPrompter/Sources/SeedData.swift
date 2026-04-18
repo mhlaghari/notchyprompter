@@ -54,9 +54,11 @@ enum SeedData {
     """
 
     static let summaryPrompt = """
-    You are given a transcript and reply log from a meeting. Produce a \
-    concise recap: what was discussed, decisions made, action items (who \
-    owes what by when if stated), and open questions. Markdown.
+    Below is a transcript from a video, talk, or conversation. Write a \
+    concise recap of what was covered — main points, examples, any \
+    decisions or action items, and open questions if present. Use \
+    markdown bullets. Be direct and factual. Ignore filler, greetings, \
+    and non-speech markers. No preamble.
     """
 
     // MARK: - Built-in names
@@ -78,7 +80,12 @@ enum SeedData {
             isBuiltIn: true,
             defaults: ModeDefaults(name: noteTakerBuiltInName,
                                    systemPrompt: noteTakerPrompt),
-            fireCadence: .debounce(seconds: 2.0)
+            // Note-taker is transcript-primary: the overlay shows what the
+            // speaker said and the LLM fires once at Stop via
+            // autoSummarizeOnStop. effectiveFireCadence overrides this
+            // stored value — keeping the seed aligned so new installs don't
+            // rely on the override.
+            fireCadence: .silent
         )
         let teleprompter = Mode(
             id: UUID(),

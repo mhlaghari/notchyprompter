@@ -97,6 +97,29 @@ final class ModeStoreTests: XCTestCase {
         XCTAssertEqual(teleprompter.systemPrompt, SeedData.teleprompterPrompt)
     }
 
+    // Note-taker's effectiveFireCadence must always resolve to .silent,
+    // regardless of what the stored fireCadence says. Guards against legacy
+    // modes.json that seeded .debounce(2.0) as well as future edits that
+    // might accidentally set something else.
+    func testNoteTakerEffectiveCadenceIsSilent() throws {
+        let store = ModeStore(file: tmpFile)
+        let noteTaker = store.modes.first { $0.name == "Note-taker" }!
+        XCTAssertEqual(noteTaker.effectiveFireCadence, .silent)
+    }
+
+    // Even if a legacy modes.json stored .debounce(2.0) for Note-taker, the
+    // runtime cadence must still be .silent.
+    func testLegacyNoteTakerWithDebounceStillResolvesSilent() throws {
+        let legacyNoteTaker = Mode(
+            id: UUID(), name: "Note-taker", systemPrompt: "prompt",
+            attachedContextIDs: [], modelOverride: nil, maxTokens: nil,
+            isBuiltIn: true,
+            defaults: ModeDefaults(name: "Note-taker", systemPrompt: "prompt"),
+            fireCadence: .debounce(seconds: 2.0)
+        )
+        XCTAssertEqual(legacyNoteTaker.effectiveFireCadence, .silent)
+    }
+
     func testLegacyCustomizedWatchingKeepsUserPromptButGetsNewName() throws {
         // User had customized their v0.2.0 Watching prompt.
         let customized = Mode(

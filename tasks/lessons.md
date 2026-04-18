@@ -66,6 +66,12 @@ Each lesson:
 - **Rule:** Apps whose only entry point is the menu bar must have a fallback: global hotkey (`NSEvent.addGlobalMonitorForEvents`), or a non-occluded overlay button, or an optional Dock icon toggle.
 - **Context:** Any macOS LSUIElement app intended to run on notched hardware. Tracked on the NotchyPrompter roadmap.
 
+### Runtime overrides beat persisted-state migrations when changing a built-in's default
+
+- **Pattern:** Changed Note-taker's default firing cadence from `.debounce(2.0)` to `.silent`. The seed already persisted `.debounce(2.0)` to `modes.json`, so every existing install would have needed a migration pass to pick up the new behaviour.
+- **Rule:** When changing a built-in's default behaviour, prefer a runtime override in a computed property (gated on `defaults.name` or an equivalent stable identifier) over adding a persisted-state migration. No disk rewrite, no staged-migration ordering concerns, reversible by flipping one line.
+- **Context:** `Mode.effectiveFireCadence`. Applies to any `Codable` settings that have both a "stored" and "resolved at runtime" form.
+
 ### Per-chunk LLM firing loses narrative thread
 
 - **Pattern:** VAD-chunked transcripts (2–5 s paragraphs) fed one-at-a-time to an LLM produce per-fragment paraphrases instead of a synthesised recap. Qwen sees 80 characters of mid-sentence text and comments on that fragment because it can't see the thread — it only ever gets one paragraph.

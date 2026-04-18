@@ -178,6 +178,12 @@ final class Pipeline {
         }
 
         switch mode.effectiveFireCadence {
+        case .silent:
+            // Transcript-primary mode (Note-taker). Surface the raw Whisper
+            // transcript on the overlay so the user sees what's being heard;
+            // the LLM is held back until Stop, where autoSummarizeOnStop
+            // produces a single recap over the full session transcript.
+            vm.setResponse(text)
         case .immediate:
             await accumulator?.flushNow()
             await handleLLM(chunk: text, client: client)
