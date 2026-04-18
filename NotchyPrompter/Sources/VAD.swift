@@ -12,7 +12,7 @@ final class VADChunker {
     struct Config {
         var rmsThreshold: Float = 0.01   // ~ -40 dBFS
         var minSpeechMs: Int = 800
-        var trailingSilenceMs: Int = 400
+        var trailingSilenceMs: Int = 900
         var maxChunkMs: Int = 15_000
         var sampleRate: Int = 16_000
         var frameMs: Int = 30
@@ -27,6 +27,14 @@ final class VADChunker {
     private var inSpeech = false
 
     init(_ cfg: Config = .init()) { self.cfg = cfg }
+
+    /// Convenience init for the common tuning knobs. Other fields use defaults.
+    convenience init(minSpeechMs: Int, trailingSilenceMs: Int) {
+        var cfg = Config()
+        cfg.minSpeechMs = minSpeechMs
+        cfg.trailingSilenceMs = trailingSilenceMs
+        self.init(cfg)
+    }
 
     var frameLen: Int { cfg.sampleRate * cfg.frameMs / 1000 }
 
