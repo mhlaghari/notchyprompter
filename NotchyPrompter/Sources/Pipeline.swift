@@ -7,6 +7,8 @@ import Foundation
 final class Pipeline {
     private let store: SettingsStore
     private let vm: OverlayViewModel
+    private let modeStore: ModeStore
+    private let contextStore: ContextStore
 
     private var capture: AudioCapture?
     private var transcriber: Transcriber?
@@ -15,9 +17,14 @@ final class Pipeline {
 
     private var history: [ChatTurn] = []
 
-    init(store: SettingsStore, vm: OverlayViewModel) {
+    init(store: SettingsStore,
+         vm: OverlayViewModel,
+         modeStore: ModeStore,
+         contextStore: ContextStore) {
         self.store = store
         self.vm = vm
+        self.modeStore = modeStore
+        self.contextStore = contextStore
     }
 
     func start() {
@@ -117,20 +124,31 @@ final class Pipeline {
     }
 
     private func handleLLM(chunk: String, client: LLMClient) async {
-        NSLog("llm: calling %@ with chunk (%d chars)", String(describing: type(of: client)), chunk.count)
+        // Resolve active mode fresh each call so mid-session mode switches take
+        // effect on the very next chunk.
+        let activeID = store.activeModeID ?? modeStore.watchingBuiltIn.id
+        let mode = modeStore.mode(by: activeID) ?? modeStore.watchingBuiltIn
+
+        let attached = mode.attachedContextIDs.compactMap { id in
+            contextStore.packs.first { $0.id == id }
+        }
+
+        let request = LLMRequest(
+            chunk: chunk,
+            history: history,
+            systemPrompt: mode.systemPrompt,
+            attachedContexts: attached,
+            modelOverride: mode.modelOverride,
+            maxTokensOverride: mode.maxTokens
+        )
+
+        NSLog("llm: calling %@ mode=%@ contexts=%d",
+              String(describing: type(of: client)), mode.name, attached.count)
         vm.clear()
         vm.displayText = ""
         var acc = ""
         var deltaCount = 0
         do {
-            let request = LLMRequest(
-                chunk: chunk,
-                history: history,
-                systemPrompt: SeedData.watchingPrompt,
-                attachedContexts: [],
-                modelOverride: nil,
-                maxTokensOverride: nil
-            )
             for try await delta in client.stream(request) {
                 if Task.isCancelled { return }
                 deltaCount += 1
@@ -147,7 +165,6 @@ final class Pipeline {
         if !reply.isEmpty {
             history.append(ChatTurn(role: "user", content: userMessage(for: chunk)))
             history.append(ChatTurn(role: "assistant", content: reply))
-            // trim to contextPairs
             let keep = store.contextPairs * 2
             if history.count > keep { history.removeFirst(history.count - keep) }
         }

@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pipeline: Pipeline?
     private let vm = OverlayViewModel()
     private let store = SettingsStore.shared
+    private let modeStore = ModeStore()
+    private let contextStore = ContextStore()
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -30,8 +32,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Pipeline
-        let p = Pipeline(store: store, vm: vm)
+        let p = Pipeline(store: store, vm: vm,
+                         modeStore: modeStore, contextStore: contextStore)
         self.pipeline = p
+
+        if store.activeModeID == nil {
+            store.activeModeID = modeStore.watchingBuiltIn.id
+        }
 
         // Menu bar
         let mb = MenuBarController(
