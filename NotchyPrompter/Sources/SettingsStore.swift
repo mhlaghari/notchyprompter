@@ -17,9 +17,17 @@ final class SettingsStore: ObservableObject {
     @AppStorage("maxTokens") var maxTokens: Int = 120
     @AppStorage("contextPairs") var contextPairs: Int = 5
     @AppStorage("autoStartOnLaunch") var autoStartOnLaunch: Bool = false
+    @AppStorage("activeModeID") var activeModeIDString: String = ""
+    @AppStorage("autoSummarizeOnStop") var autoSummarizeOnStop: Bool = true
+    @AppStorage("summaryPrompt") var summaryPrompt: String = SeedData.summaryPrompt
 
     @Published var apiKey: String = "" {
         didSet { try? Keychain.set(apiKey, service: Self.kcService, account: Self.kcAccount) }
+    }
+
+    var activeModeID: UUID? {
+        get { UUID(uuidString: activeModeIDString) }
+        set { activeModeIDString = newValue?.uuidString ?? "" }
     }
 
     var backend: LLMBackend {
