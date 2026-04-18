@@ -60,9 +60,13 @@ Triggered by a live session (`sessions/2026-04-18-105531.log`) where `*Wheat*`, 
 
 ## Next (planning only — not starting yet)
 
-- [ ] **Transcript-primary overlay + silent-until-substantial summariser.** The core v0.3 pivot: notch shows raw Whisper text; LLM only fires on a 60–90 s window of accumulated transcript with a prompt that permits empty output. Replaces per-chunk Note-taker firing. Bigger scope — needs its own spec + branch.
+Captured from live session review `sessions/2026-04-18-113741.log` + `.json`:
+
+- [ ] **Append summary text to the `.log` as well as the `.json`.** Currently `SessionRecorder.appendSummary` only rewrites the JSON. A plain `cat <id>.log` gives transcript but no recap. One-line addition to also append `[summary]\n<text>\n` to the live log.
+- [ ] **Surface the summary on the notch on Stop** (not just on disk). Small UX change — `vm.setResponse(summary)` from the `autoSummarizeOnStop` hook path with an auto-hide long enough to actually read it (probably 30–60 s, configurable).
+- [ ] **Upgrade the default summarisation model.** Qwen 2B mangled proper nouns in the 113741 summary (`Zustand` → `Zocostate`) and flattened two projects into one sentence. A larger model (Qwen 8B, Haiku) would handle this much better. User-tunable via Settings → Backend, but the *default* summary prompt / model should be chosen to match the pivot.
 - [ ] Keyboard shortcuts (⌘⇧L start/stop, ⌘⇧T transcript window) — works around menu-bar occlusion on notched Macs.
-- [ ] "Save" mode — transcript-only, no LLM, no bullets. Lightest of the four pillars (Save / Video notes / Meeting notes / Interview assist).
+- [ ] "Save" mode — transcript-only, no live overlay, no auto-summary. Lightest of the four pillars (Save / Video notes / Meeting notes / Interview assist).
 
 ## Project state — 2026-04-18
 
