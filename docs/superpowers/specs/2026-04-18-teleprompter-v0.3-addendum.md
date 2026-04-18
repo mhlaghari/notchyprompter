@@ -114,3 +114,32 @@ treatment should be visually distinct to reinforce "speak this":
 
 - Open issue from v0.2 acceptance log (2026-04-18 06:59 session): per-
   chunk firing produced 18 LLM calls in 80 seconds of real dialogue.
+
+## Blocker: stable code signing (must fix before v0.3)
+
+**Symptom:** every `./build.sh` invalidates the Screen Recording (TCC)
+grant. User has to reset `tccutil ScreenCapture
+com.mhlaghari.notchyprompter` and re-grant on every rebuild. During
+v0.2 acceptance this happened ~5 times in one session.
+
+**Root cause:** `build.sh` signs with `codesign --sign -` (ad-hoc).
+Ad-hoc signatures hash over the binary itself; every rebuild produces a
+different signature, and TCC treats each as a new app identity.
+
+**Fix options:**
+
+1. **Persistent self-signed identity (recommended for dev).** Create a
+   code-signing certificate in the login keychain once, use it on every
+   rebuild. TCC grant sticks as long as the identity doesn't change.
+   - Non-interactive script path: `openssl req` to generate a
+     key+self-signed cert with the code-signing extended key usage, then
+     `security import` into login keychain, then `codesign --sign
+     "NotchyPrompter Dev"` in `build.sh`.
+   - One-time user action: trust the cert for code signing in Keychain
+     Access.
+2. **Developer ID signing (for distribution).** Requires paid Apple
+   Developer account. Out of scope for v0.3 development; track for
+   eventual release signing.
+
+**Target:** ship option 1 as part of v0.3 so further iteration doesn't
+keep burning permission grants.

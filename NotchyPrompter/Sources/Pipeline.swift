@@ -164,6 +164,7 @@ final class Pipeline {
     private func dispatchChunk(_ text: String, client: LLMClient) async {
         let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
         let mode = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
+        DebugLog.write("dispatchChunk: mode=\(mode.name) cadence=\(mode.effectiveFireCadence) text.len=\(text.count)")
         switch mode.effectiveFireCadence {
         case .immediate:
             await accumulator?.flushNow()

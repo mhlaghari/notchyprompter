@@ -5,16 +5,16 @@ import Foundation
 /// silent for `delaySeconds`. Appending a new chunk cancels the pending
 /// flush and restarts the timer — standard debounce.
 ///
-/// Used by Pipeline when a mode's `effectiveFireCadence` is `.debounce`.
-/// For `.immediate` cadence, Pipeline bypasses the accumulator and fires
-/// directly per chunk (after calling `flushNow()` first so any in-flight
-/// buffer drains before the immediate call).
+/// Uses `DispatchQueue.main.asyncAfter` + `DispatchWorkItem` for the timer
+/// because Task-based `Task.sleep` + actor isolation was unreliable in
+/// practice (timer never fired in one acceptance run). DispatchQueue is
+/// well-understood and main-thread-scheduled by construction.
 @MainActor
 final class ChunkAccumulator {
     typealias OnFlush = (String) async -> Void
 
     private var buffer: String = ""
-    private var flushTask: Task<Void, Never>?
+    private var pendingWorkItem: DispatchWorkItem?
     private let onFlush: OnFlush
 
     init(onFlush: @escaping OnFlush) {
@@ -26,27 +26,36 @@ final class ChunkAccumulator {
     func append(_ text: String, delaySeconds: Double) {
         if !buffer.isEmpty { buffer += " " }
         buffer += text
-        flushTask?.cancel()
-        flushTask = Task { [weak self] in
-            let ns = UInt64(max(delaySeconds, 0.0) * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: ns)
-            guard let self, !Task.isCancelled else { return }
-            await self.flushNow()
+        DebugLog.write("accumulator: append len=\(text.count) buffer=\(buffer.count) delay=\(delaySeconds)s")
+        pendingWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                DebugLog.write("accumulator: timer fired, flushing \(self.buffer.count) chars")
+                await self.flushNow()
+            }
         }
+        pendingWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: work)
     }
 
     func flushNow() async {
-        flushTask?.cancel()
-        flushTask = nil
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
         let text = buffer
         buffer = ""
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty else {
+            DebugLog.write("accumulator: flushNow called on empty buffer (noop)")
+            return
+        }
+        DebugLog.write("accumulator: flushing to onFlush len=\(text.count)")
         await onFlush(text)
+        DebugLog.write("accumulator: onFlush returned")
     }
 
     func cancel() {
-        flushTask?.cancel()
-        flushTask = nil
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
         buffer = ""
     }
 }
