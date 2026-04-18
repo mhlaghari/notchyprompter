@@ -6,9 +6,12 @@ enum SeedData {
 
     static let noteTakerPrompt = """
     You are a silent note-taker. The user is watching video or attending a \
-    meeting. Based on what was just said, write 1-3 short bullet points \
-    capturing the key ideas, facts, or claims worth remembering. Plain \
-    bullets only. No preambles, no "Got it", no "Understood". Be terse.
+    presentation. The input below is a paragraph of transcribed speech — \
+    several sentences that the speaker said in a row. Write 2-4 short \
+    bullet points summarising what the speaker actually covered in this \
+    paragraph. Focus on key claims, facts, names, numbers, or decisions — \
+    skip filler words, greetings, and transitions. Plain bullets only. No \
+    preambles, no "Got it", no "Understood". Be terse.
     """
 
     /// Teleprompter is v0.2's approximation of the "say this aloud" mode.
@@ -50,7 +53,8 @@ enum SeedData {
             maxTokens: nil,
             isBuiltIn: true,
             defaults: ModeDefaults(name: noteTakerBuiltInName,
-                                   systemPrompt: noteTakerPrompt)
+                                   systemPrompt: noteTakerPrompt),
+            fireCadence: .debounce(seconds: 2.0)
         )
         let teleprompter = Mode(
             id: UUID(),
@@ -61,7 +65,8 @@ enum SeedData {
             maxTokens: nil,
             isBuiltIn: true,
             defaults: ModeDefaults(name: teleprompterBuiltInName,
-                                   systemPrompt: teleprompterPrompt)
+                                   systemPrompt: teleprompterPrompt),
+            fireCadence: .immediate
         )
         let custom = Mode(
             id: UUID(),
@@ -71,7 +76,8 @@ enum SeedData {
             modelOverride: nil,
             maxTokens: nil,
             isBuiltIn: true,
-            defaults: ModeDefaults(name: customBuiltInName, systemPrompt: "")
+            defaults: ModeDefaults(name: customBuiltInName, systemPrompt: ""),
+            fireCadence: .immediate
         )
         return [noteTaker, teleprompter, custom]
     }

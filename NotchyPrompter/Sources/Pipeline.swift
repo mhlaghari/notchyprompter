@@ -22,6 +22,7 @@ final class Pipeline {
     private var transcriber: Transcriber?
     private var llm: LLMClient?
     private var mainTask: Task<Void, Never>?
+    private var accumulator: ChunkAccumulator?
 
     private var history: [ChatTurn] = []
 
@@ -54,6 +55,11 @@ final class Pipeline {
         let initial = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
         sessionRecorder.startSession(initialMode: initial)
 
+        accumulator = ChunkAccumulator { [weak self] paragraph in
+            guard let self, let client = self.llm else { return }
+            await self.handleLLM(chunk: paragraph, client: client)
+        }
+
         mainTask = Task { [weak self] in
             await self?.run(capture: cap, transcriber: t, client: client)
         }
@@ -66,6 +72,8 @@ final class Pipeline {
         capture = nil
         transcriber = nil
         llm = nil
+        accumulator?.cancel()
+        accumulator = nil
         vm.isRunning = false
         vm.setStatus("stopped")
         let recorder = sessionRecorder
@@ -140,12 +148,29 @@ final class Pipeline {
                 sessionRecorder.recordTranscript(trimmed,
                     durationMs: Int((Double(chunk.count) / 16000.0) * 1000.0))
                 if trimmed.count < 2 { continue }
-                await handleLLM(chunk: trimmed, client: client)
+                await dispatchChunk(trimmed, client: client)
             } catch {
                 NSLog("transcribe error: \(error.localizedDescription)")
             }
         }
         forwarder.cancel()
+    }
+
+    /// Routes a fresh transcript chunk through the active mode's firing
+    /// cadence. For `.immediate`, we drain any buffered content first (so a
+    /// recent mode switch from debounce → immediate doesn't strand a
+    /// paragraph), then fire right away. For `.debounce`, we just append
+    /// to the accumulator and let its timer decide when to flush.
+    private func dispatchChunk(_ text: String, client: LLMClient) async {
+        let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
+        let mode = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
+        switch mode.effectiveFireCadence {
+        case .immediate:
+            await accumulator?.flushNow()
+            await handleLLM(chunk: text, client: client)
+        case .debounce(let seconds):
+            accumulator?.append(text, delaySeconds: seconds)
+        }
     }
 
     private func handleLLM(chunk: String, client: LLMClient) async {
