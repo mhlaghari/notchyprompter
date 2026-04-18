@@ -14,7 +14,10 @@ final class Pipeline {
     var postSessionHook: ((Session) async -> Void)?
 
     func recordModeChangeIfRunning(_ mode: Mode) {
-        guard vm.isRunning else { return }
+        guard vm.isRunning else {
+            DebugLog.write("recordModeChangeIfRunning skipped: vm.isRunning=false, mode=\(mode.name)")
+            return
+        }
         sessionRecorder.recordModeChange(mode)
     }
 
