@@ -8,6 +8,7 @@ final class SessionRecorder {
     private let directory: URL
     private let clock: Clock
     private var current: Session?
+    private var liveLogURL: URL?
 
     init(directory: URL = Paths.sessionsDir, clock: @escaping Clock = Date.init) {
         self.directory = directory
@@ -17,6 +18,10 @@ final class SessionRecorder {
     }
 
     var hasActiveSession: Bool { current != nil }
+
+    /// URL of the live plaintext log for the currently-running session, or
+    /// nil if none. Useful for tailing the transcript in real time.
+    var currentLogURL: URL? { liveLogURL }
 
     func startSession(initialMode: Mode) {
         let now = clock()
@@ -29,37 +34,59 @@ final class SessionRecorder {
             modeId: initialMode.id.uuidString, modeName: initialMode.name
         ))
         current = s
+        let logURL = directory.appendingPathComponent("\(id).log")
+        liveLogURL = logURL
+        let header = "[session \(id) started \(Self.iso.string(from: now))]\n"
+            + "[mode: \(initialMode.name)]\n"
+        try? header.write(to: logURL, atomically: true, encoding: .utf8)
     }
 
     func recordTranscript(_ text: String, durationMs: Int) {
         guard var s = current else { return }
+        let t = clock()
         s.events.append(SessionEvent(
-            t: clock(), kind: .transcript,
+            t: t, kind: .transcript,
             text: text, durationMs: durationMs,
             modeId: nil, modeName: nil
         ))
         current = s
+        appendLog("[\(Self.iso.string(from: t))] them: \(text)\n")
     }
 
     func recordReply(_ text: String) {
         guard var s = current else { return }
+        let t = clock()
         s.events.append(SessionEvent(
-            t: clock(), kind: .reply,
+            t: t, kind: .reply,
             text: text, durationMs: nil,
             modeId: nil, modeName: nil
         ))
         current = s
+        appendLog("[\(Self.iso.string(from: t))] me:   \(text)\n")
     }
 
     func recordModeChange(_ mode: Mode) {
         guard var s = current else { return }
+        let t = clock()
         s.events.append(SessionEvent(
-            t: clock(), kind: .mode,
+            t: t, kind: .mode,
             text: nil, durationMs: nil,
             modeId: mode.id.uuidString, modeName: mode.name
         ))
         current = s
+        appendLog("[\(Self.iso.string(from: t))] [mode: \(mode.name)]\n")
     }
+
+    private func appendLog(_ line: String) {
+        guard let url = liveLogURL, let data = line.data(using: .utf8) else { return }
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        }
+    }
+
+    private static let iso = ISO8601DateFormatter()
 
     @discardableResult
     func endSession() throws -> Session {

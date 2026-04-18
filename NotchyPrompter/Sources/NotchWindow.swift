@@ -7,7 +7,7 @@ final class NotchWindow: NSWindow {
     init(viewModel: OverlayViewModel) {
         self.vm = viewModel
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 64),
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: 280),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -38,8 +38,8 @@ final class NotchWindow: NSWindow {
         } else {
             topInset = 32
         }
-        let w: CGFloat = 320
-        let h: CGFloat = 64
+        let w: CGFloat = 560
+        let h: CGFloat = 280
         // Cocoa origin is bottom-left.
         let x = visible.minX + (visible.width - w) / 2
         let y = visible.maxY - topInset - h - 6
