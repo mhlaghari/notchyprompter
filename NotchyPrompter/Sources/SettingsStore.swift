@@ -20,6 +20,10 @@ final class SettingsStore: ObservableObject {
     @AppStorage("activeModeID") var activeModeIDString: String = ""
     @AppStorage("autoSummarizeOnStop") var autoSummarizeOnStop: Bool = true
     @AppStorage("summaryPrompt") var summaryPrompt: String = SeedData.summaryPrompt
+    /// When true, post-process Note-taker replies through
+    /// `AttributionStripper` to remove leading "the speaker", "one person",
+    /// etc. Safety net for small local models that ignore the prompt rule.
+    @AppStorage("stripAttribution") var stripAttribution: Bool = true
 
     @Published var apiKey: String = "" {
         didSet { try? Keychain.set(apiKey, service: Self.kcService, account: Self.kcAccount) }

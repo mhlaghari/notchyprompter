@@ -59,8 +59,40 @@ final class ModeStore: ObservableObject {
                                 newName: SeedData.teleprompterBuiltInName,
                                 newPrompt: SeedData.teleprompterPrompt)
             }
+            // Already on current naming. Refresh the built-in's prompt only
+            // when the user never customized it (pristine relative to stored
+            // defaults). This lets us roll out prompt improvements — e.g. the
+            // attribution-hallucination fix — to existing installs without
+            // clobbering user edits.
+            if m.name == SeedData.noteTakerBuiltInName {
+                return refreshedIfPristine(m, newPrompt: SeedData.noteTakerPrompt)
+            }
+            if m.name == SeedData.teleprompterBuiltInName {
+                return refreshedIfPristine(m, newPrompt: SeedData.teleprompterPrompt)
+            }
             return m
         }
+    }
+
+    /// If `m`'s current prompt still matches its stored defaults (i.e. the
+    /// user hasn't customized it), update both the prompt and the defaults
+    /// record to `newPrompt`. Otherwise leave the prompt alone but still
+    /// refresh the defaults pointer so "Reset to default" points at the new
+    /// seed text.
+    private static func refreshedIfPristine(_ m: Mode, newPrompt: String) -> Mode {
+        guard let d = m.defaults else { return m }
+        let pristine = d.systemPrompt == m.systemPrompt
+        return Mode(
+            id: m.id,
+            name: m.name,
+            systemPrompt: pristine ? newPrompt : m.systemPrompt,
+            attachedContextIDs: m.attachedContextIDs,
+            modelOverride: m.modelOverride,
+            maxTokens: m.maxTokens,
+            isBuiltIn: true,
+            defaults: ModeDefaults(name: d.name, systemPrompt: newPrompt),
+            fireCadence: m.fireCadence
+        )
     }
 
     private static func migrated(_ m: Mode, newName: String, newPrompt: String) -> Mode {
@@ -74,7 +106,8 @@ final class ModeStore: ObservableObject {
             modelOverride: m.modelOverride,
             maxTokens: m.maxTokens,
             isBuiltIn: true,
-            defaults: ModeDefaults(name: newName, systemPrompt: newPrompt)
+            defaults: ModeDefaults(name: newName, systemPrompt: newPrompt),
+            fireCadence: m.fireCadence
         )
     }
 
