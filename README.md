@@ -137,6 +137,13 @@ teleprompter/
   will complain if you move the `.app` elsewhere or hand it to someone
   else. For distribution, sign with a Developer ID cert and notarise via
   `xcrun notarytool`.
+- **May hear your own mic in rare configurations.** `ScreenCaptureKit`
+  taps the speaker-bound mix; it does not read the microphone. But if
+  your system routes mic → output (Accessibility → Live Listen, a
+  conferencing app with input monitoring, Audio Hijack chains, DAWs with
+  monitor-input on), NotchyPrompter will hear that routed audio. No
+  public API filters this out per-source. Troubleshooting steps in
+  [`docs/superpowers/research-2026-04-18-dictation-crosstalk.md`](./docs/superpowers/research-2026-04-18-dictation-crosstalk.md).
 
 ## Distribution notes (for contributors)
 
