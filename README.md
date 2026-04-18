@@ -43,13 +43,25 @@ Two options:
 ```bash
 git clone <this repo>
 cd teleprompter/NotchyPrompter
+
+# One-time: create a stable self-signed code-signing identity so macOS
+# TCC keeps the Screen Recording grant across rebuilds. You'll be
+# prompted for your login keychain password once.
+scripts/setup-dev-signing.sh
+
 ./build.sh
 open NotchyPrompter.app
 ```
 
 The build script runs `swift build -c release` (pulls [WhisperKit][wk] via
-SwiftPM), then assembles a self-contained `.app` bundle and applies an
-ad-hoc signature so macOS will launch it.
+SwiftPM), then assembles a self-contained `.app` bundle and signs it with
+the `NotchyPrompter Dev` identity created by the setup script.
+
+Why the setup step? Ad-hoc signing (the previous default) gave the
+binary a different identity hash on every build, so macOS revoked the
+Screen Recording permission after every rebuild. The self-signed
+identity is stable across rebuilds, so you grant Screen Recording once
+and it sticks.
 
 [wk]: https://github.com/argmaxinc/WhisperKit
 
@@ -120,7 +132,8 @@ teleprompter/
 - **Claude prompt cache TTL.** The static system prompt is cached
   (`anthropic-beta: prompt-caching-2024-07-31`), but ephemeral cache
   expires after ~5 min of inactivity.
-- **Self-signed.** The build script uses an ad-hoc signature; Gatekeeper
+- **Self-signed.** The build script signs with a local `NotchyPrompter
+  Dev` identity created by `scripts/setup-dev-signing.sh`. Gatekeeper
   will complain if you move the `.app` elsewhere or hand it to someone
   else. For distribution, sign with a Developer ID cert and notarise via
   `xcrun notarytool`.
@@ -153,11 +166,11 @@ Loose ends from the v0.1.0 working build. Contributions welcome.
 - [ ] Strip the per-callback `AudioCapture callbacks last 3s`,
       `audio: N blocks`, and `vad: emitting chunk` logs from `Pipeline.swift`
       and `AudioCapture.swift` — keep only error paths.
-- [ ] Replace ad-hoc signing with a stable identity so rebuilds don't
-      invalidate Screen-Recording permission every time. Options:
-      (a) create a self-signed persistent certificate in Keychain and sign
-      with `codesign --sign "NotchyPrompter Dev"`, or
-      (b) Developer ID signing for distribution.
+- [x] Replace ad-hoc signing with a stable identity so rebuilds don't
+      invalidate Screen-Recording permission every time. Done in
+      `scripts/setup-dev-signing.sh` — creates a self-signed
+      `NotchyPrompter Dev` cert; `build.sh` signs with it. Developer ID
+      signing for redistribution is still tracked under Engineering.
 
 ### Quality
 - [ ] Tune VAD: currently RMS threshold 0.01, 800 ms speech / 400 ms silence.
