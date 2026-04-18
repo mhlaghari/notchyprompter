@@ -23,18 +23,59 @@ enum AttributionStripper {
     /// Matched at the start of a bullet only — never mid-bullet — to avoid
     /// mangling quoted text or embedded references.
     private static let attributionPattern: NSRegularExpression = {
-        let verbs = "(?:said|says|claimed|claims|stated|states|explained|"
-            + "explains|described|describes|mentioned|mentions|noted|notes|"
-            + "argued|argues|discussed|discusses|questioned|questions|asked|"
-            + "asks|thinks|thought|believes|believed|wants|wanted|"
-            + "suggested|suggests|pointed out|points out|emphasized|"
-            + "emphasizes|wondered|wonders)"
-        let subjects = "(?:the speakers?|one (?:person|speaker)|another "
-            + "(?:person|speaker)|the presenter|the author|the narrator|"
-            + "the host|the interviewer|the guest|he|she|they)"
-        // e.g. "The speaker says that X", "One person: X", "The speaker — X",
-        // "They note X", "The presenter, in their discussion, says X"
-        let pattern = "^\(subjects)(?:\\s+\(verbs))?(?:\\s+that)?"
+        // Reporting verbs in all three forms we see from the LLM: past,
+        // third-person singular, bare infinitive. The bare form matters for
+        // plural subjects ("Speakers mention", "Users want"). List is
+        // conservative — unknown verbs leave the bullet unchanged rather
+        // than over-strip. Expand as new patterns are observed in sessions.
+        let verbs = "(?:"
+            + "said|says|say|"
+            + "claimed|claims|claim|"
+            + "stated|states|state|"
+            + "explained|explains|explain|"
+            + "described|describes|describe|"
+            + "mentioned|mentions|mention|"
+            + "noted|notes|note|"
+            + "argued|argues|argue|"
+            + "discussed|discusses|discuss|"
+            + "questioned|questions|question|"
+            + "asked|asks|ask|"
+            + "thought|thinks|think|"
+            + "believed|believes|believe|"
+            + "wanted|wants|want|"
+            + "suggested|suggests|suggest|"
+            + "pointed out|points out|point out|"
+            + "emphasized|emphasizes|emphasize|"
+            + "wondered|wonders|wonder|"
+            + "recommended|recommends|recommend|"
+            + "advised|advises|advise|"
+            + "transitioned|transitions|transition|"
+            + "introduced|introduces|introduce|"
+            + "outlined|outlines|outline|"
+            + "challenged|challenges|challenge|"
+            + "enrolled|enrolls|enroll|"
+            + "thanked|thanks|thank|"
+            + "indicated|indicates|indicate|"
+            + "used|uses|use|"
+            + "acknowledged|acknowledges|acknowledge|"
+            + "concluded|concludes|conclude|"
+            + "highlighted|highlights|highlight|"
+            + "reminded|reminds|remind|"
+            + "warned|warns|warn"
+            + ")"
+        // Article-optional on all single-noun subjects so we catch both
+        // "The speaker said X" and "Speaker advises X" (Qwen 2B emits the
+        // article-less form frequently). "User(s)" added for the same reason.
+        let subjects = "(?:(?:the\\s+)?speakers?|(?:the\\s+)?users?|"
+            + "one (?:person|speaker)|another (?:person|speaker)|"
+            + "(?:the\\s+)?presenter|(?:the\\s+)?author|(?:the\\s+)?narrator|"
+            + "(?:the\\s+)?host|(?:the\\s+)?interviewer|(?:the\\s+)?guest|"
+            + "he|she|they)"
+        // Require the subject to be followed by whitespace or a separator —
+        // this keeps possessives ("The speaker's microphone") and any other
+        // word-joined continuation from matching.
+        let pattern = "^\(subjects)(?=\\s|[,:\\-—–])"
+            + "(?:\\s+\(verbs))?(?:\\s+that)?"
             + "\\s*[,:\\-—–]?\\s*"
         return try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }()

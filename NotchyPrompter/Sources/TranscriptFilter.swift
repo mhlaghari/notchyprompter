@@ -33,6 +33,8 @@ enum TranscriptFilter {
     static let lowSignal: Set<String> = [
         "thank you",
         "thanks",
+        "thanks for watching",
+        "thank you for watching",
         "okay",
         "ok",
         "got it",
@@ -44,6 +46,20 @@ enum TranscriptFilter {
         "[applause]",
     ]
 
+    /// Matches a chunk that is entirely a non-speech marker. WhisperKit
+    /// emits these for short non-speech sounds:
+    ///   `*Bip*`, `*Wheat*`, `*Wheep*`, `[Music]`, `[Applause]`, `[ applause ]`
+    /// The multi-word bracketed ones (e.g. `[Light music]`) pass the token
+    /// floor, so we need a dedicated regex rather than relying on token count
+    /// alone. Anchored to the full trimmed chunk — mid-sentence `*emphasis*`
+    /// or quoted `[citations]` don't trigger this.
+    private static let nonSpeechMarker: NSRegularExpression = {
+        try! NSRegularExpression(
+            pattern: "^[\\*\\[]\\s*[A-Za-z][A-Za-z ]*\\s*[\\*\\]]$",
+            options: []
+        )
+    }()
+
     /// Returns `.send` if the chunk should proceed to the LLM, or
     /// `.skip(reason:)` with a short human-readable explanation
     /// suitable for a debug log line.
@@ -54,6 +70,12 @@ enum TranscriptFilter {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             return .skip(reason: "empty")
+        }
+
+        let ns = trimmed as NSString
+        let fullRange = NSRange(location: 0, length: ns.length)
+        if nonSpeechMarker.firstMatch(in: trimmed, options: [], range: fullRange) != nil {
+            return .skip(reason: "non-speech marker: \(trimmed)")
         }
 
         let normalised = normalise(trimmed)

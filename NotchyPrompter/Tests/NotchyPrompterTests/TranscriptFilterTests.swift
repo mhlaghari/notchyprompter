@@ -84,4 +84,40 @@ final class TranscriptFilterTests: XCTestCase {
         XCTAssertTrue(TranscriptFilter.lowSignal.contains("thank you"))
         XCTAssertTrue(TranscriptFilter.lowSignal.contains("[music]"))
     }
+
+    // Whisper emits *star-wrapped* markers for non-speech sounds it can't
+    // transcribe (`*Bip*`, `*Wheat*`, `*Wheep*`). These must be skipped
+    // regardless of the token-count path — single-word ones hit token count,
+    // multi-word ones (`[Light music]`) would pass it without this regex.
+    func testStarWrappedNonSpeechMarkersAreSkipped() {
+        for s in ["*Bip*", "*Wheat*", "*Wheep*", "*beep*", "*click*"] {
+            if case .send = TranscriptFilter.decide(s) {
+                XCTFail("\(s) should be skipped as a non-speech marker")
+            }
+        }
+    }
+
+    func testMultiWordBracketedMarkersAreSkipped() {
+        // "Light music" inside brackets is 2 tokens between the braces,
+        // which would slip past the token-count floor without the marker
+        // regex.
+        for s in ["[Light music]", "[soft applause]", "[crowd murmur]"] {
+            if case .send = TranscriptFilter.decide(s) {
+                XCTFail("\(s) should be skipped as a non-speech marker")
+            }
+        }
+    }
+
+    // Mid-sentence stars or brackets must NOT trigger the marker regex —
+    // only the whole-chunk form counts as non-speech.
+    func testMidSentenceStarsAndBracketsAreNotMisclassified() {
+        let samples = [
+            "I said *absolutely* not to that request",
+            "The report cites [Smith 2023] for context",
+        ]
+        for s in samples {
+            XCTAssertEqual(TranscriptFilter.decide(s), .send,
+                           "expected send for mid-sentence markup in \"\(s)\"")
+        }
+    }
 }
