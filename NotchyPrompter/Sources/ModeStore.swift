@@ -25,11 +25,57 @@ final class ModeStore: ObservableObject {
         if let data = try? Data(contentsOf: file),
            let decoded = try? JSONDecoder().decode([Mode].self, from: data),
            !decoded.isEmpty {
-            return decoded
+            let migrated = migrateLegacyBuiltIns(decoded)
+            if migrated != decoded {
+                try? save(migrated, to: file)
+            }
+            return migrated
         }
         let seeded = SeedData.initialModes()
         try? Self.save(seeded, to: file)
         return seeded
+    }
+
+    /// Upgrade modes.json written by v0.2.0 (which seeded "Watching" and
+    /// "Meeting" built-ins) to the current naming ("Note-taker",
+    /// "Teleprompter"). Preserves UUIDs so `activeModeID` references stay
+    /// valid. If the user hadn't customized the built-in (i.e. its current
+    /// prompt still matches its stored defaults), also refresh the prompt
+    /// to the new default. If they had customized it, keep their prompt
+    /// but rename it and update the defaults record.
+    private static func migrateLegacyBuiltIns(_ modes: [Mode]) -> [Mode] {
+        return modes.map { m in
+            guard m.isBuiltIn else { return m }
+
+            if m.defaults?.name == SeedData.legacyNoteTakerName
+                || m.name == SeedData.legacyNoteTakerName {
+                return migrated(m,
+                                newName: SeedData.noteTakerBuiltInName,
+                                newPrompt: SeedData.noteTakerPrompt)
+            }
+            if m.defaults?.name == SeedData.legacyTeleprompterName
+                || m.name == SeedData.legacyTeleprompterName {
+                return migrated(m,
+                                newName: SeedData.teleprompterBuiltInName,
+                                newPrompt: SeedData.teleprompterPrompt)
+            }
+            return m
+        }
+    }
+
+    private static func migrated(_ m: Mode, newName: String, newPrompt: String) -> Mode {
+        let oldDefaults = m.defaults
+        let wasPristine = oldDefaults.map { $0.name == m.name && $0.systemPrompt == m.systemPrompt } ?? true
+        return Mode(
+            id: m.id,
+            name: newName,
+            systemPrompt: wasPristine ? newPrompt : m.systemPrompt,
+            attachedContextIDs: m.attachedContextIDs,
+            modelOverride: m.modelOverride,
+            maxTokens: m.maxTokens,
+            isBuiltIn: true,
+            defaults: ModeDefaults(name: newName, systemPrompt: newPrompt)
+        )
     }
 
     private static func save(_ modes: [Mode], to file: URL) throws {
@@ -79,9 +125,10 @@ final class ModeStore: ObservableObject {
         return copy
     }
 
-    /// The Watching built-in, guaranteed to exist post-seed.
-    var watchingBuiltIn: Mode {
-        modes.first { $0.name == SeedData.watchingBuiltInName && $0.isBuiltIn }!
+    /// The Note-taker built-in, guaranteed to exist post-seed. Used as the
+    /// default active mode when the user has no preference.
+    var noteTakerBuiltIn: Mode {
+        modes.first { $0.name == SeedData.noteTakerBuiltInName && $0.isBuiltIn }!
     }
 
     func mode(by id: UUID) -> Mode? {

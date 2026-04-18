@@ -2,30 +2,28 @@
 import Foundation
 
 enum SeedData {
-    static let watchingPrompt = """
-    You are a silent meeting copilot. Give me 1-2 concise bullet points I \
-    should respond with or be aware of based on what the other person just \
-    said. Be extremely brief.
+    // MARK: - Prompts
+
+    static let noteTakerPrompt = """
+    You are a silent note-taker. The user is watching video or attending a \
+    meeting. Based on what was just said, write 1-3 short bullet points \
+    capturing the key ideas, facts, or claims worth remembering. Plain \
+    bullets only. No preambles, no "Got it", no "Understood". Be terse.
     """
 
-    static let meetingPrompt = """
-    You are a silent meeting copilot. Draft a concise first-person response \
-    I can say out loud right now, grounded in any attached context notes. \
-    Use bullets only if the other person asked a multi-part question. Be \
-    extremely brief — one or two sentences at most.
-    """
-
-    static let interviewPrompt = """
-    You are a silent interview copilot. Draft a concise first-person answer \
-    to the interviewer's question, grounded in the attached résumé and job \
-    description. If the question is behavioural, lead with STAR structure. \
-    One or two sentences.
-    """
-
-    static let presentingPrompt = """
-    You are a silent presentation copilot. The audience just asked a \
-    question. Draft a concise first-person answer suitable for a live \
-    presentation, grounded in the attached deck notes. One or two sentences.
+    /// Teleprompter is v0.2's approximation of the "say this aloud" mode.
+    /// Known limitation: Claude still sometimes slips into "Got it. We'll …"
+    /// acknowledgment language. v0.3 will harden the prompt and add smarter
+    /// firing (only on detected questions). Tracked in the spec.
+    static let teleprompterPrompt = """
+    You are a silent teleprompter for the user. The OTHER person just spoke. \
+    Output the exact words the USER should say next, in the user's own \
+    voice, to continue the conversation. Strict rules: (1) speak directly to \
+    the other person; do not describe actions or acknowledge instructions; \
+    (2) no preambles — never start with "Got it", "Understood", \
+    "Absolutely", or "Sure"; (3) first person (I, we); (4) one or two \
+    sentences at most. If the other person asked a question, answer it in \
+    the user's voice.
     """
 
     static let summaryPrompt = """
@@ -34,62 +32,53 @@ enum SeedData {
     owes what by when if stated), and open questions. Markdown.
     """
 
+    // MARK: - Built-in names
+
+    static let noteTakerBuiltInName = "Note-taker"
+    static let teleprompterBuiltInName = "Teleprompter"
+    static let customBuiltInName = "Custom"
+
+    // MARK: - Initial seed
+
     static func initialModes() -> [Mode] {
-        let watching = Mode(
+        let noteTaker = Mode(
             id: UUID(),
-            name: "Watching",
-            systemPrompt: watchingPrompt,
+            name: noteTakerBuiltInName,
+            systemPrompt: noteTakerPrompt,
             attachedContextIDs: [],
             modelOverride: nil,
             maxTokens: nil,
             isBuiltIn: true,
-            defaults: ModeDefaults(name: "Watching", systemPrompt: watchingPrompt)
+            defaults: ModeDefaults(name: noteTakerBuiltInName,
+                                   systemPrompt: noteTakerPrompt)
         )
-        let meeting = Mode(
+        let teleprompter = Mode(
             id: UUID(),
-            name: "Meeting",
-            systemPrompt: meetingPrompt,
+            name: teleprompterBuiltInName,
+            systemPrompt: teleprompterPrompt,
             attachedContextIDs: [],
             modelOverride: nil,
             maxTokens: nil,
             isBuiltIn: true,
-            defaults: ModeDefaults(name: "Meeting", systemPrompt: meetingPrompt)
+            defaults: ModeDefaults(name: teleprompterBuiltInName,
+                                   systemPrompt: teleprompterPrompt)
         )
         let custom = Mode(
             id: UUID(),
-            name: "Custom",
+            name: customBuiltInName,
             systemPrompt: "",
             attachedContextIDs: [],
             modelOverride: nil,
             maxTokens: nil,
             isBuiltIn: true,
-            defaults: ModeDefaults(name: "Custom", systemPrompt: "")
+            defaults: ModeDefaults(name: customBuiltInName, systemPrompt: "")
         )
-        let interview = Mode(
-            id: UUID(),
-            name: "Interview",
-            systemPrompt: interviewPrompt,
-            attachedContextIDs: [],
-            modelOverride: nil,
-            maxTokens: nil,
-            isBuiltIn: false,
-            defaults: nil
-        )
-        let presenting = Mode(
-            id: UUID(),
-            name: "Presenting",
-            systemPrompt: presentingPrompt,
-            attachedContextIDs: [],
-            modelOverride: nil,
-            maxTokens: nil,
-            isBuiltIn: false,
-            defaults: nil
-        )
-        return [watching, meeting, custom, interview, presenting]
+        return [noteTaker, teleprompter, custom]
     }
 
-    /// ID used by callers that want to look up the Watching built-in by name
-    /// for initial `activeModeID`. We re-derive it at runtime from ModeStore
-    /// rather than hardcoding, since the seeded UUIDs are fresh per install.
-    static let watchingBuiltInName = "Watching"
+    // MARK: - Legacy migration
+
+    /// Names used by the v0.2.0 seed. Migrated in place on load.
+    static let legacyNoteTakerName = "Watching"
+    static let legacyTeleprompterName = "Meeting"
 }

@@ -17,44 +17,103 @@ final class ModeStoreTests: XCTestCase {
 
     func testSeedsWhenMissing() throws {
         let store = ModeStore(file: tmpFile)
-        XCTAssertEqual(store.modes.count, 5)
-        XCTAssertTrue(store.modes.contains { $0.name == "Watching" && $0.isBuiltIn })
-        XCTAssertTrue(store.modes.contains { $0.name == "Interview" && !$0.isBuiltIn })
+        XCTAssertEqual(store.modes.count, 3)
+        XCTAssertTrue(store.modes.contains { $0.name == "Note-taker" && $0.isBuiltIn })
+        XCTAssertTrue(store.modes.contains { $0.name == "Teleprompter" && $0.isBuiltIn })
+        XCTAssertTrue(store.modes.contains { $0.name == "Custom" && $0.isBuiltIn })
     }
 
     func testSaveAndReload() throws {
         let store = ModeStore(file: tmpFile)
-        var m = store.modes.first { $0.name == "Meeting" }!
+        var m = store.modes.first { $0.name == "Teleprompter" }!
         m.systemPrompt = "overridden"
         try store.upsert(m)
 
         let store2 = ModeStore(file: tmpFile)
-        let reloaded = store2.modes.first { $0.name == "Meeting" }!
+        let reloaded = store2.modes.first { $0.name == "Teleprompter" }!
         XCTAssertEqual(reloaded.systemPrompt, "overridden")
         XCTAssertTrue(reloaded.isDirty)
     }
 
     func testResetToDefault() throws {
         let store = ModeStore(file: tmpFile)
-        var m = store.modes.first { $0.name == "Meeting" }!
+        var m = store.modes.first { $0.name == "Teleprompter" }!
         let originalPrompt = m.systemPrompt
         m.systemPrompt = "something else"
         try store.upsert(m)
         try store.resetToDefaults(id: m.id)
-        let restored = store.modes.first { $0.name == "Meeting" }!
+        let restored = store.modes.first { $0.name == "Teleprompter" }!
         XCTAssertEqual(restored.systemPrompt, originalPrompt)
     }
 
     func testDeleteBuiltInIsRejected() throws {
         let store = ModeStore(file: tmpFile)
-        let watching = store.modes.first { $0.name == "Watching" }!
-        XCTAssertThrowsError(try store.delete(id: watching.id))
+        let noteTaker = store.modes.first { $0.name == "Note-taker" }!
+        XCTAssertThrowsError(try store.delete(id: noteTaker.id))
     }
 
     func testDeleteCustom() throws {
         let store = ModeStore(file: tmpFile)
-        let interview = store.modes.first { $0.name == "Interview" }!
-        try store.delete(id: interview.id)
-        XCTAssertNil(store.modes.first { $0.id == interview.id })
+        // No seeded customs in the new seed; create one, then delete it.
+        let custom = Mode(
+            id: UUID(), name: "Scratch", systemPrompt: "",
+            attachedContextIDs: [], modelOverride: nil, maxTokens: nil,
+            isBuiltIn: false, defaults: nil
+        )
+        try store.upsert(custom)
+        XCTAssertNotNil(store.modes.first { $0.id == custom.id })
+        try store.delete(id: custom.id)
+        XCTAssertNil(store.modes.first { $0.id == custom.id })
+    }
+
+    func testLegacyWatchingMigratesToNoteTaker() throws {
+        // Simulate a v0.2.0 modes.json with the old names.
+        let legacyWatching = Mode(
+            id: UUID(), name: "Watching", systemPrompt: "legacy watching prompt",
+            attachedContextIDs: [], modelOverride: nil, maxTokens: nil,
+            isBuiltIn: true,
+            defaults: ModeDefaults(name: "Watching", systemPrompt: "legacy watching prompt")
+        )
+        let legacyMeeting = Mode(
+            id: UUID(), name: "Meeting", systemPrompt: "legacy meeting prompt",
+            attachedContextIDs: [], modelOverride: nil, maxTokens: nil,
+            isBuiltIn: true,
+            defaults: ModeDefaults(name: "Meeting", systemPrompt: "legacy meeting prompt")
+        )
+        let legacyIDWatching = legacyWatching.id
+        let legacyIDMeeting = legacyMeeting.id
+
+        let enc = JSONEncoder()
+        try enc.encode([legacyWatching, legacyMeeting]).write(to: tmpFile)
+
+        let store = ModeStore(file: tmpFile)
+        let noteTaker = store.modes.first { $0.name == "Note-taker" }!
+        let teleprompter = store.modes.first { $0.name == "Teleprompter" }!
+        XCTAssertEqual(noteTaker.id, legacyIDWatching,
+                       "UUID must be preserved so activeModeID stays valid")
+        XCTAssertEqual(teleprompter.id, legacyIDMeeting)
+        // Pristine (unmodified) legacy built-ins get the new prompt.
+        XCTAssertEqual(noteTaker.systemPrompt, SeedData.noteTakerPrompt)
+        XCTAssertEqual(teleprompter.systemPrompt, SeedData.teleprompterPrompt)
+    }
+
+    func testLegacyCustomizedWatchingKeepsUserPromptButGetsNewName() throws {
+        // User had customized their v0.2.0 Watching prompt.
+        let customized = Mode(
+            id: UUID(), name: "Watching", systemPrompt: "MY PROMPT",
+            attachedContextIDs: [], modelOverride: nil, maxTokens: nil,
+            isBuiltIn: true,
+            defaults: ModeDefaults(name: "Watching", systemPrompt: "legacy default")
+        )
+        let enc = JSONEncoder()
+        try enc.encode([customized]).write(to: tmpFile)
+
+        let store = ModeStore(file: tmpFile)
+        let migrated = store.modes.first { $0.isBuiltIn }!
+        XCTAssertEqual(migrated.name, "Note-taker")
+        XCTAssertEqual(migrated.systemPrompt, "MY PROMPT",
+                       "User customization must survive migration")
+        XCTAssertEqual(migrated.defaults?.systemPrompt, SeedData.noteTakerPrompt,
+                       "Defaults should point to the new-version default")
     }
 }

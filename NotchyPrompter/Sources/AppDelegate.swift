@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if store.activeModeID == nil {
-            store.activeModeID = modeStore.watchingBuiltIn.id
+            store.activeModeID = modeStore.noteTakerBuiltIn.id
         }
 
         // Menu bar
@@ -72,7 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSWorkspace.shared.selectFile(nil,
                                               inFileViewerRootedAtPath: Paths.sessionsDir.path)
             },
-            onEditModes: { [weak self] in self?.openSettingsToModesTab() }
+            onEditModes: { [weak self] in self?.openSettingsToModesTab() },
+            onShowTranscript: { [weak self] in self?.openLiveTranscript() }
         )
         self.menuBar = mb
 
@@ -141,6 +142,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var summaryWC: NSWindowController?
+    private var transcriptWC: LiveTranscriptWindowController?
+
+    private func openLiveTranscript() {
+        if transcriptWC == nil {
+            let r = sessionRecorder
+            transcriptWC = LiveTranscriptWindowController(logURLProvider: { r.currentLogURL })
+        }
+        transcriptWC?.show()
+    }
 
     private func selectMode(id: UUID) {
         store.activeModeID = id

@@ -10,6 +10,7 @@ final class MenuBarController: NSObject {
     private let onSummarizeLast: () -> Void
     private let onOpenSessionsFolder: () -> Void
     private let onEditModes: () -> Void
+    private let onShowTranscript: () -> Void
     private weak var vm: OverlayViewModel?
     private let modeStore: ModeStore
     private let settingsStore: SettingsStore
@@ -25,7 +26,8 @@ final class MenuBarController: NSObject {
          onSelectMode: @escaping (UUID) -> Void,
          onSummarizeLast: @escaping () -> Void,
          onOpenSessionsFolder: @escaping () -> Void,
-         onEditModes: @escaping () -> Void) {
+         onEditModes: @escaping () -> Void,
+         onShowTranscript: @escaping () -> Void) {
         self.vm = vm
         self.modeStore = modeStore
         self.settingsStore = settingsStore
@@ -37,6 +39,7 @@ final class MenuBarController: NSObject {
         self.onSummarizeLast = onSummarizeLast
         self.onOpenSessionsFolder = onOpenSessionsFolder
         self.onEditModes = onEditModes
+        self.onShowTranscript = onShowTranscript
         self.item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
@@ -86,6 +89,11 @@ final class MenuBarController: NSObject {
 
         menu.addItem(.separator())
 
+        let transcript = NSMenuItem(title: "Show Live Transcript",
+                                    action: #selector(showTranscriptSel), keyEquivalent: "t")
+        transcript.target = self
+        menu.addItem(transcript)
+
         let summarize = NSMenuItem(title: "Summarize Last Session…",
                                    action: #selector(summarizeSel), keyEquivalent: "")
         summarize.target = self
@@ -129,6 +137,7 @@ final class MenuBarController: NSObject {
     @objc private func summarizeSel() { onSummarizeLast() }
     @objc private func openFolderSel() { onOpenSessionsFolder() }
     @objc private func editModesSel() { onEditModes() }
+    @objc private func showTranscriptSel() { onShowTranscript() }
     @objc private func selectModeSel(_ sender: NSMenuItem) {
         guard let s = sender.representedObject as? String,
               let id = UUID(uuidString: s) else { return }

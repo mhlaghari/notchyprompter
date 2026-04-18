@@ -35,7 +35,7 @@ struct ModesSettingsView: View {
             }
         }
         .onAppear {
-            if selected == nil { selected = modeStore.watchingBuiltIn.id }
+            if selected == nil { selected = modeStore.noteTakerBuiltIn.id }
         }
     }
 

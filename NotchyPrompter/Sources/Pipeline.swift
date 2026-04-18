@@ -50,8 +50,8 @@ final class Pipeline {
         self.capture = cap
         vm.isRunning = true
         vm.setStatus("starting…")
-        let activeID = store.activeModeID ?? modeStore.watchingBuiltIn.id
-        let initial = modeStore.mode(by: activeID) ?? modeStore.watchingBuiltIn
+        let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
+        let initial = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
         sessionRecorder.startSession(initialMode: initial)
 
         mainTask = Task { [weak self] in
@@ -151,8 +151,8 @@ final class Pipeline {
     private func handleLLM(chunk: String, client: LLMClient) async {
         // Resolve active mode fresh each call so mid-session mode switches take
         // effect on the very next chunk.
-        let activeID = store.activeModeID ?? modeStore.watchingBuiltIn.id
-        let mode = modeStore.mode(by: activeID) ?? modeStore.watchingBuiltIn
+        let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
+        let mode = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
 
         let attached = mode.attachedContextIDs.compactMap { id in
             contextStore.packs.first { $0.id == id }
