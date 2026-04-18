@@ -100,12 +100,25 @@ openssl req -x509 -newkey rsa:2048 -nodes \
     -extensions v3_codesign >/dev/null 2>&1
 
 log "Bundling key + cert into PKCS#12 for keychain import"
-openssl pkcs12 -export \
-    -inkey "$KEY_PATH" \
-    -in "$CERT_PATH" \
-    -name "$CERT_CN" \
-    -out "$P12_PATH" \
-    -passout "pass:${P12_PASS}" >/dev/null 2>&1
+# OpenSSL 3.x defaults to AES-256-CBC + PBKDF2 with SHA-256 MAC for PKCS#12.
+# macOS's `security` tool ships a CDSA-era PKCS#12 reader that only understands
+# the legacy algorithms (PBE-SHA1-3DES + SHA1 MAC) and fails with
+# "MAC verification failed during PKCS12 import (wrong password?)" on the newer
+# format. `-legacy` forces OpenSSL 3 to produce the old format. OpenSSL 1.x
+# doesn't know the flag and its default output is already legacy, so fall back.
+if ! openssl pkcs12 -export -legacy \
+        -inkey "$KEY_PATH" \
+        -in "$CERT_PATH" \
+        -name "$CERT_CN" \
+        -out "$P12_PATH" \
+        -passout "pass:${P12_PASS}" >/dev/null 2>&1; then
+    openssl pkcs12 -export \
+        -inkey "$KEY_PATH" \
+        -in "$CERT_PATH" \
+        -name "$CERT_CN" \
+        -out "$P12_PATH" \
+        -passout "pass:${P12_PASS}" >/dev/null 2>&1
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Import into the login keychain.
