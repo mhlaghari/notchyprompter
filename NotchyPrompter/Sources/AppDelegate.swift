@@ -105,9 +105,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openSettings() {
         if settingsWC == nil {
-            let view = SettingsView(
+            let view = SettingsTabs(
                 store: store,
                 vm: vm,
+                modeStore: modeStore,
+                contextStore: contextStore,
                 onStart: { [weak self] in
                     self?.pipeline?.start()
                     self?.store.autoStartOnLaunch = true

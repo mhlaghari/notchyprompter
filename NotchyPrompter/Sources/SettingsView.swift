@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct SettingsView: View {
+struct BackendSettingsView: View {
     @ObservedObject var store: SettingsStore
     @ObservedObject var vm: OverlayViewModel
     var onStart: () -> Void
