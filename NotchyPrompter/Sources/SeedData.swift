@@ -22,19 +22,35 @@ enum SeedData {
     - Be terse — aim for under 12 words per bullet.
     """
 
-    /// Teleprompter is v0.2's approximation of the "say this aloud" mode.
-    /// Known limitation: Claude still sometimes slips into "Got it. We'll …"
-    /// acknowledgment language. v0.3 will harden the prompt and add smarter
-    /// firing (only on detected questions). Tracked in the spec.
+    /// v0.3 Teleprompter prompt. The v0.2 prompt reliably produced
+    /// acknowledgment-language slippage ("Got it. We'll set up comments…")
+    /// because "first-person response I can say out loud" reads as "reply
+    /// from Claude-the-assistant" under Claude's training distribution.
+    ///
+    /// This rewrite:
+    /// - Phrases as a direct imperative (`Reply with EXACTLY …`) instead of
+    ///   describing the assistant's role, which reduces role-play drift.
+    /// - Expands the explicit deny-list of acknowledgment tokens ("Got it",
+    ///   "Okay", "Yeah", "Right" etc.) so the first-token distribution is
+    ///   pushed away from filler.
+    /// - Names "silence or a single word" as legitimate outputs so the model
+    ///   doesn't feel obligated to produce a full sentence on every chunk.
+    /// - Drops "first-person (I, we)" phrasing — empirically Claude latches
+    ///   onto that as "first-person assistant voice" rather than "user's
+    ///   own voice speaking to the other person".
+    ///
+    /// See docs/superpowers/specs/2026-04-18-teleprompter-v0.3-addendum.md.
     static let teleprompterPrompt = """
-    You are a silent teleprompter for the user. The OTHER person just spoke. \
-    Output the exact words the USER should say next, in the user's own \
-    voice, to continue the conversation. Strict rules: (1) speak directly to \
-    the other person; do not describe actions or acknowledge instructions; \
-    (2) no preambles — never start with "Got it", "Understood", \
-    "Absolutely", or "Sure"; (3) first person (I, we); (4) one or two \
-    sentences at most. If the other person asked a question, answer it in \
-    the user's voice.
+    The other person said: `<chunk>`. Reply with EXACTLY what the user \
+    should say back to them — nothing else. Do not acknowledge them \
+    first. Do not summarise what they said. Do not describe what the \
+    user will do. Do not start with "Got it", "Understood", \
+    "Absolutely", "Sure", "Okay", "Yeah", "Right". Start directly with \
+    the words the user speaks. If the user's best response is silence \
+    or a single word, return a single word. If the other person asked \
+    a question, answer it in the user's voice, grounded in attached \
+    context. Be extremely brief — one sentence unless the question \
+    genuinely requires two.
     """
 
     static let summaryPrompt = """
