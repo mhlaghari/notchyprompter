@@ -8,3 +8,6 @@ NotchyPrompter/.build/
 NotchyPrompter/.swiftpm/
 NotchyPrompter/NotchyPrompter.app/
 # Package.resolved is committed so everyone gets the same dependency versions.
+
+# Per-run session artifacts — contain actual voice transcripts, never commit.
+sessions/

@@ -216,7 +216,7 @@ final class Pipeline {
         if !reply.isEmpty {
             history.append(ChatTurn(role: "user", content: userMessage(for: chunk)))
             history.append(ChatTurn(role: "assistant", content: reply))
-            sessionRecorder.recordReply(reply)
+            sessionRecorder.recordReply(reply, label: mode.outputLabel)
             let keep = store.contextPairs * 2
             if history.count > keep { history.removeFirst(history.count - keep) }
         }

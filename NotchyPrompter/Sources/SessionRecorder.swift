@@ -53,7 +53,7 @@ final class SessionRecorder {
         appendLog("[\(Self.iso.string(from: t))] them: \(text)\n")
     }
 
-    func recordReply(_ text: String) {
+    func recordReply(_ text: String, label: String = "ai") {
         guard var s = current else { return }
         let t = clock()
         s.events.append(SessionEvent(
@@ -62,7 +62,10 @@ final class SessionRecorder {
             modeId: nil, modeName: nil
         ))
         current = s
-        appendLog("[\(Self.iso.string(from: t))] me:   \(text)\n")
+        // Pad label to align with "them:" (5 chars) so logs stay column-aligned
+        // when the label is shorter (e.g. "ai"  ).
+        let padded = label.padding(toLength: max(5, label.count), withPad: " ", startingAt: 0)
+        appendLog("[\(Self.iso.string(from: t))] \(padded): \(text)\n")
     }
 
     func recordModeChange(_ mode: Mode) {

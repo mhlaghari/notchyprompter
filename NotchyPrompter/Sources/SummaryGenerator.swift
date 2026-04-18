@@ -9,18 +9,29 @@ struct SummaryGenerator {
     let client: LLMClient
 
     /// Renders the session's events as a transcript log suitable for the
-    /// summary prompt.
+    /// summary prompt. Reply lines are labelled according to the most recent
+    /// `mode` event in the stream (notes / draft / ai) to match what the
+    /// live `.log` file wrote at the time.
     static func transcriptText(for session: Session) -> String {
         var out: [String] = []
         let df = ISO8601DateFormatter()
+        var currentLabel = "ai"
         for e in session.events {
             switch e.kind {
             case .mode:
-                out.append("[mode: \(e.modeName ?? "?")]")
+                let name = e.modeName ?? "?"
+                out.append("[mode: \(name)]")
+                switch name {
+                case "Note-taker": currentLabel = "notes"
+                case "Teleprompter": currentLabel = "draft"
+                default: currentLabel = "ai"
+                }
             case .transcript:
-                out.append("[\(df.string(from: e.t))] them: \(e.text ?? "")")
+                out.append("[\(df.string(from: e.t))] them:  \(e.text ?? "")")
             case .reply:
-                out.append("[\(df.string(from: e.t))] me:   \(e.text ?? "")")
+                let padded = currentLabel.padding(toLength: max(5, currentLabel.count),
+                                                  withPad: " ", startingAt: 0)
+                out.append("[\(df.string(from: e.t))] \(padded): \(e.text ?? "")")
             }
         }
         return out.joined(separator: "\n")

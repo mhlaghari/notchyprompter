@@ -56,4 +56,18 @@ struct Mode: Codable, Identifiable, Equatable {
         if name == "Note-taker" { return .debounce(seconds: 2.0) }
         return .immediate
     }
+
+    /// Label written to session logs for this mode's LLM output. Reflects what
+    /// the LLM is actually producing so a reader doesn't mistake the line for
+    /// something the user said:
+    ///   - Note-taker → `notes`  (bullets about what was said)
+    ///   - Teleprompter → `draft` (first-person replies to speak)
+    ///   - anything else → `ai`   (generic LLM output)
+    var outputLabel: String {
+        switch name {
+        case "Note-taker": return "notes"
+        case "Teleprompter": return "draft"
+        default: return "ai"
+        }
+    }
 }

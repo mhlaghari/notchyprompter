@@ -3,7 +3,12 @@ import Foundation
 
 /// Resolves the on-disk locations used by v0.2 stores.
 ///
-/// All paths live under ~/Library/Application Support/NotchyPrompter/.
+/// Persistent app state (modes.json, context packs) lives under
+/// ~/Library/Application Support/NotchyPrompter/.
+/// Per-run session artifacts (.log / .json) live in the project folder at
+/// ~/teleprompter/sessions/ so the user can browse them alongside the code
+/// without descending into ~/Library. The project's .gitignore excludes
+/// `sessions/` so transcripts never get committed.
 /// Directories are created lazily on first access.
 enum Paths {
     static var appSupportDir: URL {
@@ -25,7 +30,8 @@ enum Paths {
     }
 
     static var sessionsDir: URL {
-        let d = appSupportDir.appendingPathComponent("sessions", isDirectory: true)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let d = home.appendingPathComponent("teleprompter/sessions", isDirectory: true)
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }
