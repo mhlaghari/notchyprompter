@@ -6,6 +6,9 @@ struct BackendSettingsView: View {
     var onStart: () -> Void
     var onStop: () -> Void
     @State private var showKey = false
+    @State private var ollamaModels: [String] = []
+    @State private var ollamaProbeError: String? = nil
+    @State private var ollamaProbeLoading = false
 
     var body: some View {
         Form {
@@ -40,11 +43,58 @@ struct BackendSettingsView: View {
                 Section("Ollama") {
                     TextField("Base URL", text: $store.ollamaURL)
                         .textFieldStyle(.roundedBorder)
-                    TextField("Model", text: $store.ollamaModel)
-                        .textFieldStyle(.roundedBorder)
-                    Text("Start with `ollama serve` and `ollama pull \(store.ollamaModel)`.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .onChange(of: store.ollamaURL) { _, _ in
+                            Task { await refreshOllamaModels() }
+                        }
+
+                    if ollamaProbeError == nil && !ollamaModels.isEmpty {
+                        HStack {
+                            Picker("Model", selection: $store.ollamaModel) {
+                                ForEach(modelPickerOptions, id: \.self) { name in
+                                    Text(name).tag(name)
+                                }
+                            }
+                            Button {
+                                Task { await refreshOllamaModels() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(ollamaProbeLoading)
+                        }
+                        TextField("Or type a model name", text: $store.ollamaModel)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        HStack {
+                            TextField("Model", text: $store.ollamaModel)
+                                .textFieldStyle(.roundedBorder)
+                            Button {
+                                Task { await refreshOllamaModels() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(ollamaProbeLoading)
+                        }
+                    }
+
+                    if let err = ollamaProbeError {
+                        Text(err)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else if !ollamaModels.isEmpty,
+                              !ollamaModels.contains(store.ollamaModel) {
+                        Text("Model '\(store.ollamaModel)' isn't installed. Run `ollama pull \(store.ollamaModel)`.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("Start with `ollama serve` and `ollama pull \(store.ollamaModel)`.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .task {
+                    await refreshOllamaModels()
                 }
             }
 
@@ -82,5 +132,33 @@ struct BackendSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 520, height: 560)
+    }
+
+    /// Picker options: installed models, plus the current value if it isn't in
+    /// the list (so the user's custom entry stays selected).
+    private var modelPickerOptions: [String] {
+        if store.ollamaModel.isEmpty || ollamaModels.contains(store.ollamaModel) {
+            return ollamaModels
+        }
+        return ollamaModels + [store.ollamaModel]
+    }
+
+    private func refreshOllamaModels() async {
+        guard let url = URL(string: store.ollamaURL) else {
+            ollamaProbeError = "Invalid Ollama URL: \(store.ollamaURL)"
+            ollamaModels = []
+            return
+        }
+        ollamaProbeLoading = true
+        defer { ollamaProbeLoading = false }
+        do {
+            let probe = OllamaModelsProbe(baseURL: url)
+            let names = try await probe.listInstalled()
+            ollamaModels = names
+            ollamaProbeError = nil
+        } catch {
+            ollamaModels = []
+            ollamaProbeError = "Couldn't reach Ollama at \(store.ollamaURL). Is `ollama serve` running?"
+        }
     }
 }
