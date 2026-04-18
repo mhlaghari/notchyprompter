@@ -165,6 +165,18 @@ final class Pipeline {
         let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
         let mode = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
         DebugLog.write("dispatchChunk: mode=\(mode.name) cadence=\(mode.effectiveFireCadence) text.len=\(text.count)")
+
+        // Note-taker-specific: drop trivial chunks ("Thank you.", "Okay.")
+        // before they reach the accumulator, since Qwen 2B ignores the
+        // prompt's "output nothing for filler" rule. Teleprompter has its
+        // own firing rules (issue #4) — don't filter there.
+        if mode.name == SeedData.noteTakerBuiltInName {
+            if case .skip(let reason) = TranscriptFilter.decide(text) {
+                DebugLog.write("filter: skip (\(reason)) text=\"\(text)\"")
+                return
+            }
+        }
+
         switch mode.effectiveFireCadence {
         case .immediate:
             await accumulator?.flushNow()
