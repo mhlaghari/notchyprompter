@@ -193,26 +193,10 @@ Loose ends from the v0.1.0 working build. Contributions welcome.
 - [ ] Settings "Test Connection" button for both backends.
 
 ### Features
-- [ ] **Custom prompts + context packs** — the headline v0.2 feature.
-      Right now the built-in prompt summarises what the other person said;
-      users want the overlay to draft a **response they can actually speak
-      back**, grounded in their own notes. Plan:
-  - Add a "Prompt presets" library in Settings (Interview, Presentation,
-    Sales call, Tech support, Custom) with editable system prompt,
-    user-message template, and response style ("one-liner",
-    "bulleted reply", "answer in first person").
-  - Add a **Context** pane: paste or drop notes, job description,
-    product one-pager, résumé, answers to common questions. Store as
-    plain markdown on disk (`~/Library/Application Support/NotchyPrompter/contexts/*.md`).
-    Attach one or more contexts to each preset.
-  - Wire context into every request via Claude's prompt cache
-    (`cache_control: ephemeral` so reload is free within 5 min) and
-    Ollama's `system` field.
-  - Default preset shift: instead of "give me 1–2 bullets summarising what
-    they said", the new default becomes **"Draft a concise first-person
-    response I can say out loud, using the supplied context. Only bullet
-    if the listener asked a multi-part question."** The summary mode stays
-    as one of the presets for people who want it.
+- [x] ~~**Custom prompts + context packs** — the headline v0.2 feature.~~
+      Shipped in v0.2.0 as Modes (Note-taker / Teleprompter / Custom +
+      seeded Interview / Presenting) and Context Packs. See CHANGELOG and
+      `docs/superpowers/specs/2026-04-18-modes-and-sessions-design.md`.
 - [ ] Per-conversation history export (copy transcript + replies to
       clipboard / save to `.md`).
 - [ ] Support streaming LLM output character-by-character into the overlay
