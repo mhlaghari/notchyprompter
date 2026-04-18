@@ -212,7 +212,21 @@ final class Pipeline {
             vm.setStatus("LLM error: \(error.localizedDescription)")
             return
         }
-        let reply = acc.trimmingCharacters(in: .whitespacesAndNewlines)
+        var reply = acc.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Post-process Note-taker output to scrub attribution artifacts like
+        // "- The speaker says X". Only runs for Note-taker so Teleprompter's
+        // first-person voice isn't touched. Gated on the user setting so it
+        // can be disabled for debugging the raw model output.
+        if store.stripAttribution, mode.name == SeedData.noteTakerBuiltInName {
+            let cleaned = AttributionStripper.clean(reply)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleaned != reply {
+                reply = cleaned
+                // Reflect the cleaned text on the overlay so the user doesn't
+                // see the pre-strip version lingering after streaming ended.
+                vm.setResponse(reply)
+            }
+        }
         if !reply.isEmpty {
             history.append(ChatTurn(role: "user", content: userMessage(for: chunk)))
             history.append(ChatTurn(role: "assistant", content: reply))

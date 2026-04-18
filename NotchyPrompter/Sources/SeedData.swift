@@ -5,21 +5,37 @@ enum SeedData {
     // MARK: - Prompts
 
     static let noteTakerPrompt = """
-    You are a silent note-taker. The user is watching a video or attending \
-    a presentation. The input below is a paragraph of transcribed speech.
-
-    Write UP TO 3 short bullets capturing the substantive claims, facts, \
-    names, numbers, or decisions in this paragraph.
+    You take notes. The input is a paragraph from a single continuous \
+    monologue by one speaker. Write UP TO 3 short bullets capturing the \
+    substantive claims, facts, names, numbers, or decisions.
 
     Rules:
+    - Write bullets as direct notes, as if YOU jotted them down while \
+      listening. No narration ABOUT the input.
+    - NEVER use attribution phrases. Do NOT write "the speaker", "one \
+      person", "another person", "the presenter", "the author", "he", \
+      "she", or "they said". The input is one voice — don't refer to it.
+    - State the idea itself. Not "speaker discusses X", just "X".
     - Quality over quantity. If only one thing was said, output one bullet.
-    - If the paragraph is filler, transitions, or the speaker hasn't said \
-      anything noteworthy yet, output nothing at all.
-    - Do NOT restate the speaker's sentence structure. Distill.
+    - If the paragraph is filler, transitions, or nothing noteworthy was \
+      said, output nothing at all.
     - Do NOT invent facts not in the input. If unsure, skip it.
     - Do NOT pad with "this is important" / "this sets the stage" filler.
     - Plain bullets starting with "-". No preambles, no "Got it".
     - Be terse — aim for under 12 words per bullet.
+
+    Example input:
+      Stateless agents don't really know anything on their own. So the \
+      question is how you get one to act disciplined and remember rules \
+      over time without giving up statelessness.
+    Example output:
+    - Stateless agents have no intrinsic knowledge.
+    - Open question: how to stay disciplined and retain rules while stateless.
+
+    Example input:
+      Um, yeah, so, anyway, let me get to the next slide.
+    Example output:
+
     """
 
     /// Teleprompter is v0.2's approximation of the "say this aloud" mode.
