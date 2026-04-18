@@ -1,14 +1,57 @@
 import Foundation
 
 /// Minimal Anthropic Messages API streaming client via URLSession + SSE.
-/// Uses prompt caching on the static system message (ephemeral, 5-min TTL).
+/// Uses prompt caching on the system prompt plus up to 3 attached context
+/// blocks (Anthropic caps cache_control at 4 breakpoints per request).
 struct ClaudeClient: LLMClient {
     let apiKey: String
-    let model: String
-    let maxTokens: Int
+    let model: String             // default model; overridden per-request if set
+    let maxTokens: Int            // default; overridden per-request if set
     let apiVersion: String = "2023-06-01"
+    private static let maxCacheBreakpoints = 4  // total across system blocks
 
-    func stream(chunk: String, history: [ChatTurn]) -> AsyncThrowingStream<String, Error> {
+    /// Builds the `system` array payload. Exposed for unit tests.
+    static func systemBlocks(for request: LLMRequest) -> [[String: Any]] {
+        let systemBlock: [String: Any] = [
+            "type": "text",
+            "text": request.systemPrompt,
+            "cache_control": ["type": "ephemeral"],
+        ]
+        // Remaining breakpoints after the system block.
+        let budget = maxCacheBreakpoints - 1
+        let ctx = request.attachedContexts
+        if ctx.count <= budget {
+            return [systemBlock] + ctx.map {
+                [
+                    "type": "text",
+                    "text": $0.body,
+                    "cache_control": ["type": "ephemeral"],
+                ]
+            }
+        }
+        // First (budget - 1) get their own blocks; the rest are concatenated
+        // into the final block (which still gets a cache breakpoint).
+        var blocks: [[String: Any]] = [systemBlock]
+        let solo = ctx.prefix(budget - 1)
+        for c in solo {
+            blocks.append([
+                "type": "text",
+                "text": c.body,
+                "cache_control": ["type": "ephemeral"],
+            ])
+        }
+        let tail = ctx.dropFirst(budget - 1)
+            .map { $0.body }
+            .joined(separator: "\n\n---\n\n")
+        blocks.append([
+            "type": "text",
+            "text": tail,
+            "cache_control": ["type": "ephemeral"],
+        ])
+        return blocks
+    }
+
+    func stream(_ request: LLMRequest) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -21,16 +64,12 @@ struct ClaudeClient: LLMClient {
                     req.setValue("prompt-caching-2024-07-31", forHTTPHeaderField: "anthropic-beta")
 
                     let body: [String: Any] = [
-                        "model": model,
-                        "max_tokens": maxTokens,
+                        "model": request.modelOverride ?? model,
+                        "max_tokens": request.maxTokensOverride ?? maxTokens,
                         "stream": true,
-                        "system": [[
-                            "type": "text",
-                            "text": systemPrompt,
-                            "cache_control": ["type": "ephemeral"],
-                        ]],
-                        "messages": (history.map { ["role": $0.role, "content": $0.content] })
-                            + [["role": "user", "content": userMessage(for: chunk)]],
+                        "system": Self.systemBlocks(for: request),
+                        "messages": (request.history.map { ["role": $0.role, "content": $0.content] })
+                            + [["role": "user", "content": userMessage(for: request.chunk)]],
                     ]
                     req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
@@ -64,13 +103,10 @@ struct ClaudeClient: LLMClient {
 
                             if currentEvent == "content_block_delta",
                                let delta = obj["delta"] as? [String: Any],
-                               let text = delta["text"] as? String,
-                               !text.isEmpty {
+                               let text = delta["text"] as? String, !text.isEmpty {
                                 continuation.yield(text)
                             }
-                            if currentEvent == "message_stop" {
-                                break
-                            }
+                            if currentEvent == "message_stop" { break }
                             if currentEvent == "error",
                                let errObj = obj["error"] as? [String: Any],
                                let msg = errObj["message"] as? String {

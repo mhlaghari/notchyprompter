@@ -1,12 +1,21 @@
 import Foundation
 
 /// Ollama chat streaming via newline-delimited JSON over HTTP.
+/// No prompt cache; system prompt is rebuilt from scratch per request.
 struct OllamaClient: LLMClient {
-    let baseURL: URL       // e.g. http://localhost:11434
+    let baseURL: URL
     let model: String
     let maxTokens: Int
 
-    func stream(chunk: String, history: [ChatTurn]) -> AsyncThrowingStream<String, Error> {
+    private static func systemString(for request: LLMRequest) -> String {
+        var parts: [String] = [request.systemPrompt]
+        for c in request.attachedContexts {
+            parts.append("---\n\n\(c.body)")
+        }
+        return parts.joined(separator: "\n\n")
+    }
+
+    func stream(_ request: LLMRequest) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -15,21 +24,19 @@ struct OllamaClient: LLMClient {
                     req.setValue("application/json", forHTTPHeaderField: "content-type")
 
                     var messages: [[String: String]] = [
-                        ["role": "system", "content": systemPrompt]
+                        ["role": "system", "content": Self.systemString(for: request)]
                     ]
-                    messages.append(contentsOf: history.map { ["role": $0.role, "content": $0.content] })
-                    messages.append(["role": "user", "content": userMessage(for: chunk)])
+                    messages.append(contentsOf: request.history.map {
+                        ["role": $0.role, "content": $0.content]
+                    })
+                    messages.append(["role": "user", "content": userMessage(for: request.chunk)])
 
                     let body: [String: Any] = [
-                        "model": model,
+                        "model": request.modelOverride ?? model,
                         "messages": messages,
                         "stream": true,
-                        // Disable thinking mode for reasoning-capable models
-                        // (qwen3.x, deepseek-r1, etc.) so content tokens
-                        // start streaming immediately instead of after the
-                        // model finishes its hidden chain-of-thought.
                         "think": false,
-                        "options": ["num_predict": maxTokens],
+                        "options": ["num_predict": request.maxTokensOverride ?? maxTokens],
                     ]
                     req.httpBody = try JSONSerialization.data(withJSONObject: body)
 

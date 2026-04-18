@@ -123,7 +123,15 @@ final class Pipeline {
         var acc = ""
         var deltaCount = 0
         do {
-            for try await delta in client.stream(chunk: chunk, history: history) {
+            let request = LLMRequest(
+                chunk: chunk,
+                history: history,
+                systemPrompt: SeedData.watchingPrompt,
+                attachedContexts: [],
+                modelOverride: nil,
+                maxTokensOverride: nil
+            )
+            for try await delta in client.stream(request) {
                 if Task.isCancelled { return }
                 deltaCount += 1
                 acc += delta
