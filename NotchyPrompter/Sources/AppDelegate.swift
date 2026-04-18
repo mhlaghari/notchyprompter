@@ -60,15 +60,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Menu bar
         let mb = MenuBarController(
             vm: vm,
+            modeStore: modeStore,
+            settingsStore: store,
+            sessionRecorder: sessionRecorder,
             onSettings: { [weak self] in self?.openSettings() },
             onToggle: { [weak self] in self?.togglePipeline() },
-            onQuit: { NSApp.terminate(nil) }
+            onQuit: { NSApp.terminate(nil) },
+            onSelectMode: { [weak self] id in self?.selectMode(id: id) },
+            onSummarizeLast: { [weak self] in self?.summarizeLast() },
+            onOpenSessionsFolder: {
+                NSWorkspace.shared.selectFile(nil,
+                                              inFileViewerRootedAtPath: Paths.sessionsDir.path)
+            },
+            onEditModes: { [weak self] in self?.openSettingsToModesTab() }
         )
         self.menuBar = mb
 
         // React to running state
         vm.$isRunning.sink { [weak self] running in
             self?.menuBar?.rebuildMenu(running: running)
+        }.store(in: &cancellables)
+
+        modeStore.$modes.sink { [weak self] _ in
+            self?.menuBar?.rebuildMenu(running: self?.vm.isRunning ?? false)
         }.store(in: &cancellables)
 
         // Always open Settings on launch — it's the user's primary UI since
@@ -122,5 +136,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         pipeline?.stop()
+    }
+
+    private var summaryWC: NSWindowController?
+
+    private func selectMode(id: UUID) {
+        store.activeModeID = id
+        if let mode = modeStore.mode(by: id) {
+            pipeline?.recordModeChangeIfRunning(mode)
+        }
+        menuBar?.rebuildMenu(running: vm.isRunning)
+    }
+
+    private func summarizeLast() {
+        guard let latest = sessionRecorder.listSessions().first else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let data = try Data(contentsOf: latest.fileURL)
+                let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+                let s = try dec.decode(Session.self, from: data)
+                if let summary = s.summaries.last?.text {
+                    self.showSummaryWindow(text: summary, sessionID: s.id)
+                } else if let client = self.store.buildClient() {
+                    let gen = SummaryGenerator(client: client)
+                    let text = try await gen.run(prompt: self.store.summaryPrompt, session: s)
+                    try self.sessionRecorder.appendSummary(
+                        sessionID: s.id, prompt: self.store.summaryPrompt, text: text)
+                    self.showSummaryWindow(text: text, sessionID: s.id)
+                }
+            } catch {
+                NSLog("summarizeLast error: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func showSummaryWindow(text: String, sessionID: String) {
+        let scroll = NSScrollView()
+        let tv = NSTextView()
+        tv.isEditable = false
+        tv.string = text
+        scroll.documentView = tv
+        scroll.hasVerticalScroller = true
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 420),
+                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                           backing: .buffered, defer: false)
+        win.title = "Summary — \(sessionID)"
+        win.contentView = scroll
+        win.center()
+        let wc = NSWindowController(window: win)
+        summaryWC = wc
+        NSApp.activate(ignoringOtherApps: true)
+        wc.showWindow(nil)
+    }
+
+    private func openSettingsToModesTab() {
+        openSettings()
+        NotificationCenter.default.post(name: .init("OpenModesTab"), object: nil)
     }
 }
