@@ -7,17 +7,35 @@ import Foundation
 final class Pipeline {
     private let store: SettingsStore
     private let vm: OverlayViewModel
+    private let modeStore: ModeStore
+    private let contextStore: ContextStore
+    private let sessionRecorder: SessionRecorder
+
+    var postSessionHook: ((Session) async -> Void)?
+
+    func recordModeChangeIfRunning(_ mode: Mode) {
+        guard vm.isRunning else { return }
+        sessionRecorder.recordModeChange(mode)
+    }
 
     private var capture: AudioCapture?
     private var transcriber: Transcriber?
     private var llm: LLMClient?
     private var mainTask: Task<Void, Never>?
+    private var accumulator: ChunkAccumulator?
 
     private var history: [ChatTurn] = []
 
-    init(store: SettingsStore, vm: OverlayViewModel) {
+    init(store: SettingsStore,
+         vm: OverlayViewModel,
+         modeStore: ModeStore,
+         contextStore: ContextStore,
+         sessionRecorder: SessionRecorder) {
         self.store = store
         self.vm = vm
+        self.modeStore = modeStore
+        self.contextStore = contextStore
+        self.sessionRecorder = sessionRecorder
     }
 
     func start() {
@@ -33,6 +51,14 @@ final class Pipeline {
         self.capture = cap
         vm.isRunning = true
         vm.setStatus("starting…")
+        let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
+        let initial = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
+        sessionRecorder.startSession(initialMode: initial)
+
+        accumulator = ChunkAccumulator { [weak self] paragraph in
+            guard let self, let client = self.llm else { return }
+            await self.handleLLM(chunk: paragraph, client: client)
+        }
 
         mainTask = Task { [weak self] in
             await self?.run(capture: cap, transcriber: t, client: client)
@@ -46,8 +72,20 @@ final class Pipeline {
         capture = nil
         transcriber = nil
         llm = nil
+        accumulator?.cancel()
+        accumulator = nil
         vm.isRunning = false
         vm.setStatus("stopped")
+        let recorder = sessionRecorder
+        let hook = postSessionHook
+        Task { @MainActor in
+            do {
+                let session = try recorder.endSession()
+                await hook?(session)
+            } catch {
+                NSLog("session end: %@", error.localizedDescription)
+            }
+        }
     }
 
     private func run(capture: AudioCapture,
@@ -107,8 +145,10 @@ final class Pipeline {
                 let text = try await transcriber.transcribe(chunk)
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 NSLog("transcribe -> %@", trimmed.isEmpty ? "<empty>" : trimmed)
+                sessionRecorder.recordTranscript(trimmed,
+                    durationMs: Int((Double(chunk.count) / 16000.0) * 1000.0))
                 if trimmed.count < 2 { continue }
-                await handleLLM(chunk: trimmed, client: client)
+                await dispatchChunk(trimmed, client: client)
             } catch {
                 NSLog("transcribe error: \(error.localizedDescription)")
             }
@@ -116,14 +156,51 @@ final class Pipeline {
         forwarder.cancel()
     }
 
+    /// Routes a fresh transcript chunk through the active mode's firing
+    /// cadence. For `.immediate`, we drain any buffered content first (so a
+    /// recent mode switch from debounce → immediate doesn't strand a
+    /// paragraph), then fire right away. For `.debounce`, we just append
+    /// to the accumulator and let its timer decide when to flush.
+    private func dispatchChunk(_ text: String, client: LLMClient) async {
+        let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
+        let mode = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
+        DebugLog.write("dispatchChunk: mode=\(mode.name) cadence=\(mode.effectiveFireCadence) text.len=\(text.count)")
+        switch mode.effectiveFireCadence {
+        case .immediate:
+            await accumulator?.flushNow()
+            await handleLLM(chunk: text, client: client)
+        case .debounce(let seconds):
+            accumulator?.append(text, delaySeconds: seconds)
+        }
+    }
+
     private func handleLLM(chunk: String, client: LLMClient) async {
-        NSLog("llm: calling %@ with chunk (%d chars)", String(describing: type(of: client)), chunk.count)
+        // Resolve active mode fresh each call so mid-session mode switches take
+        // effect on the very next chunk.
+        let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
+        let mode = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
+
+        let attached = mode.attachedContextIDs.compactMap { id in
+            contextStore.packs.first { $0.id == id }
+        }
+
+        let request = LLMRequest(
+            chunk: chunk,
+            history: history,
+            systemPrompt: mode.systemPrompt,
+            attachedContexts: attached,
+            modelOverride: mode.modelOverride,
+            maxTokensOverride: mode.maxTokens
+        )
+
+        NSLog("llm: calling %@ mode=%@ contexts=%d",
+              String(describing: type(of: client)), mode.name, attached.count)
         vm.clear()
         vm.displayText = ""
         var acc = ""
         var deltaCount = 0
         do {
-            for try await delta in client.stream(chunk: chunk, history: history) {
+            for try await delta in client.stream(request) {
                 if Task.isCancelled { return }
                 deltaCount += 1
                 acc += delta
@@ -139,7 +216,7 @@ final class Pipeline {
         if !reply.isEmpty {
             history.append(ChatTurn(role: "user", content: userMessage(for: chunk)))
             history.append(ChatTurn(role: "assistant", content: reply))
-            // trim to contextPairs
+            sessionRecorder.recordReply(reply)
             let keep = store.contextPairs * 2
             if history.count > keep { history.removeFirst(history.count - keep) }
         }

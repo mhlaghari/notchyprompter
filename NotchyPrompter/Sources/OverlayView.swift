@@ -7,13 +7,13 @@ struct OverlayView: View {
         ZStack {
             if !vm.displayText.isEmpty {
                 Text(vm.displayText)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
-                    .lineLimit(3)
-                    .truncationMode(.tail)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 520, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .fill(Color.black.opacity(0.78))

@@ -18,5 +18,10 @@ let package = Package(
             ],
             path: "Sources"
         ),
+        .testTarget(
+            name: "NotchyPrompterTests",
+            dependencies: ["NotchyPrompter"],
+            path: "Tests/NotchyPrompterTests"
+        ),
     ]
 )

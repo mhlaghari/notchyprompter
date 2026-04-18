@@ -1,7 +1,7 @@
 .DS_Store
 
-# Local Claude Code state
-.claude/
+# Claude Code — share hooks/commands/agents, keep personal settings local
+.claude/settings.local.json
 
 # SwiftPM
 NotchyPrompter/.build/
