@@ -13,10 +13,19 @@ worktree at `/Users/mhlaghari/.config/superpowers/worktrees/teleprompter/v0.2-mo
 
 ---
 
-## Issue 1 — Stable code-signing identity (highest priority, blocks dev)
+## Issue 1 — Stable code-signing identity (RESOLVED in v0.2.0)
 
-**Symptom.** Every `./build.sh` invalidates the Screen Recording (TCC)
-grant. User must `tccutil reset ScreenCapture
+**Status:** Fixed — shipped as `scripts/setup-dev-signing.sh` in v0.2.0.
+TCC now keys off the `NotchyPrompter Dev` leaf-cert SHA in the Designated
+Requirement, verified surviving a rebuild cycle in acceptance testing
+after a one-time `tccutil reset`. Known caveat: first rebuild after
+switching away from the old ad-hoc identity needs `tccutil reset
+ScreenCapture com.mhlaghari.notchyprompter` once to clear the stale
+grant; the setup script should probably do this automatically in a
+future revision.
+
+**Original symptom (for history).** Every `./build.sh` invalidated the
+Screen Recording (TCC) grant. User had to `tccutil reset ScreenCapture
 com.mhlaghari.notchyprompter`, re-grant in System Settings, sometimes
 restart the app twice, for each rebuild. This happened ~5 times during
 a single acceptance-testing session.
