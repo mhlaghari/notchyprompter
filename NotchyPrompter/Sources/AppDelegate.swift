@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = SettingsStore.shared
     private let modeStore = ModeStore()
     private let contextStore = ContextStore()
+    private let sessionRecorder = SessionRecorder()
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -33,7 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Pipeline
         let p = Pipeline(store: store, vm: vm,
-                         modeStore: modeStore, contextStore: contextStore)
+                         modeStore: modeStore, contextStore: contextStore,
+                         sessionRecorder: sessionRecorder)
         self.pipeline = p
 
         if store.activeModeID == nil {

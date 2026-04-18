@@ -9,6 +9,14 @@ final class Pipeline {
     private let vm: OverlayViewModel
     private let modeStore: ModeStore
     private let contextStore: ContextStore
+    private let sessionRecorder: SessionRecorder
+
+    var postSessionHook: ((Session) async -> Void)?
+
+    func recordModeChangeIfRunning(_ mode: Mode) {
+        guard vm.isRunning else { return }
+        sessionRecorder.recordModeChange(mode)
+    }
 
     private var capture: AudioCapture?
     private var transcriber: Transcriber?
@@ -20,11 +28,13 @@ final class Pipeline {
     init(store: SettingsStore,
          vm: OverlayViewModel,
          modeStore: ModeStore,
-         contextStore: ContextStore) {
+         contextStore: ContextStore,
+         sessionRecorder: SessionRecorder) {
         self.store = store
         self.vm = vm
         self.modeStore = modeStore
         self.contextStore = contextStore
+        self.sessionRecorder = sessionRecorder
     }
 
     func start() {
@@ -40,6 +50,9 @@ final class Pipeline {
         self.capture = cap
         vm.isRunning = true
         vm.setStatus("starting…")
+        let activeID = store.activeModeID ?? modeStore.watchingBuiltIn.id
+        let initial = modeStore.mode(by: activeID) ?? modeStore.watchingBuiltIn
+        sessionRecorder.startSession(initialMode: initial)
 
         mainTask = Task { [weak self] in
             await self?.run(capture: cap, transcriber: t, client: client)
@@ -55,6 +68,16 @@ final class Pipeline {
         llm = nil
         vm.isRunning = false
         vm.setStatus("stopped")
+        let recorder = sessionRecorder
+        let hook = postSessionHook
+        Task { @MainActor in
+            do {
+                let session = try recorder.endSession()
+                await hook?(session)
+            } catch {
+                NSLog("session end: %@", error.localizedDescription)
+            }
+        }
     }
 
     private func run(capture: AudioCapture,
@@ -114,6 +137,8 @@ final class Pipeline {
                 let text = try await transcriber.transcribe(chunk)
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 NSLog("transcribe -> %@", trimmed.isEmpty ? "<empty>" : trimmed)
+                sessionRecorder.recordTranscript(trimmed,
+                    durationMs: Int((Double(chunk.count) / 16000.0) * 1000.0))
                 if trimmed.count < 2 { continue }
                 await handleLLM(chunk: trimmed, client: client)
             } catch {
@@ -165,6 +190,7 @@ final class Pipeline {
         if !reply.isEmpty {
             history.append(ChatTurn(role: "user", content: userMessage(for: chunk)))
             history.append(ChatTurn(role: "assistant", content: reply))
+            sessionRecorder.recordReply(reply)
             let keep = store.contextPairs * 2
             if history.count > keep { history.removeFirst(history.count - keep) }
         }
