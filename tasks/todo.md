@@ -58,6 +58,45 @@ Triggered by a live session (`sessions/2026-04-18-105531.log`) where `*Wheat*`, 
 - Regex subject patterns for natural-language stripping need lookaheads to guard possessives.
 - Reporting-verb whitelists for LLM-output scrubbing must include bare infinitives to catch plural subjects.
 
+## Current plan — 2026-04-19: act on `m13v` feedback on #7 and #8
+
+Triggered by external comments on issues #7 and #8 (see `docs/superpowers/research-2026-04-19-m13v-feedback.md` for full verdict + citations).
+
+### DO
+
+- [x] **Grace-period VAD refactor** (supersedes #10). Branch `issue-8-vad-grace-period`.
+  - [x] Rename `trailingSilenceMs` → `endOfUtteranceGraceMs`, default 1200 ms. Kept `minSpeechMs=800` as cough-filter gate. Update docstring to reflect grace-period semantics.
+  - [x] Emission already resets on new speech (silenceMs=0) — the refactor is primarily a rename + threshold bump + doc change. Concatenation behavior verified by unit tests.
+  - [x] Keep existing `maxChunkMs` (15 s) hard cap.
+  - [x] Unit tests (`VADChunkerTests.swift`, 7 tests): no-speech sanity; short-speech-below-minSpeech; long-silence emits; **1 s mid-paragraph pause does NOT emit** (regression test calibrated between PR #10's 900 ms and new 1200 ms); triple-burst concatenation; hard-cap.
+  - [x] `swift test` green (39 → 46).
+  - [x] `swift build -c release` green.
+  - [ ] Close PR #10 with a link to the new branch; reference supersedes. (User action.)
+- [ ] **Per-app audio exclusion for speech daemons** (closes #7). Extends branch `issue-7-dictation-crosstalk-research` OR new branch — decide when branching.
+  - [ ] Add `excludedSpeechBundleIDs` constant to `AudioCapture.swift`.
+  - [ ] Switch `SCShareableContent.excludingDesktopWindows(_, onScreenWindowsOnly:)` from `true` → `false` so background daemons appear.
+  - [ ] Filter `content.applications` by the exclusion set; pass to `SCContentFilter(..., excludingApplications:, ...)`.
+  - [ ] Log which bundle IDs were found + excluded on startup (once, then shut up).
+  - [ ] Rewrite `docs/superpowers/research-2026-04-18-dictation-crosstalk.md` — correct the "no public API" conclusion, point at the new code.
+  - [ ] Keep README Known-limitations entry; reduce to caveat about user-side routing (Live Listen / aggregate devices).
+  - [ ] `swift build -c release` green.
+  - [ ] Live test: enable macOS Dictation (⌘twice), trigger a recognition chirp, verify it does NOT appear in the transcript.
+- [ ] **Close PR #10** once grace-period PR opens.
+- [ ] **Update PR #14** (or retarget) with new research verdict + code.
+
+### DON'T
+
+- **Don't pull Silero v5 in.** `m13v`'s grace-period fix resolves the emission bug without changing the detector. Revisit only if RMS false-negatives show up in live sessions after the grace-period ships.
+- **Don't migrate to `AudioHardwareCreateProcessTap`.** Much bigger rewrite; stick with SCK exclusion list for now. Note as future work.
+- **Don't add semantic/transformer EoU.** Overkill; keep the ~30-line refactor.
+- **Don't ship PR #10 as-is.** It's a 400→900 ms bandaid on the wrong axis.
+
+### DEFER (unchanged from yesterday's plan)
+
+- **PR #13 (Ollama picker)** — complete, just needs manual UI smoke-test before marking ready.
+- **PR #9 (Teleprompter v0.3 prompt)** — complete, needs live A/B.
+- **PR #15 (mode-change diagnostic)** — logging only, waits on live repro of #5.
+
 ## Next (planning only — not starting yet)
 
 Captured from live session review `sessions/2026-04-18-113741.log` + `.json`:
