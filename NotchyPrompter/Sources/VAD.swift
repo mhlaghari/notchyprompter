@@ -1,19 +1,27 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import Foundation
 
-/// Energy-based silence detector over a 16 kHz mono Float stream.
+/// Energy-based utterance detector over a 16 kHz mono Float stream.
 ///
-/// Emits a chunk (the buffered speech + trailing silence) once the speaker
-/// has produced ≥ `minSpeechMs` of speech followed by ≥ `trailingSilenceMs`
-/// of silence. Also flushes if the buffer exceeds `maxChunkMs`.
+/// Emits a chunk (buffered speech + trailing silence) using a grace-period
+/// model: once the speaker has produced ≥ `minSpeechMs` of speech, we wait
+/// `endOfUtteranceGraceMs` of continuous silence before flushing. If speech
+/// resumes inside the grace window, the existing buffer keeps growing — so a
+/// rapid speaker's sub-grace breaths concatenate into a single paragraph-sized
+/// chunk instead of splitting mid-sentence.
 ///
-/// Simpler than webrtcvad and dependency-free; accuracy is plenty for a
-/// one-human meeting signal. Threshold is in RMS amplitude (0.0–1.0).
+/// Also flushes unconditionally if the buffer exceeds `maxChunkMs` to bound
+/// latency on pathological monologues.
+///
+/// Threshold is RMS amplitude (0.0–1.0). Dependency-free; accuracy is fine for
+/// a single-speaker signal. See `docs/superpowers/research-2026-04-19-m13v-feedback.md`
+/// for the endpointing literature and why this shape beats wall-clock debounce.
 final class VADChunker {
     struct Config {
-        var rmsThreshold: Float = 0.01   // ~ -40 dBFS
-        var minSpeechMs: Int = 800
-        var trailingSilenceMs: Int = 400
-        var maxChunkMs: Int = 15_000
+        var rmsThreshold: Float = 0.01        // ~ -40 dBFS
+        var minSpeechMs: Int = 800            // gate coughs / throat-clears
+        var endOfUtteranceGraceMs: Int = 1200 // hangover before commit
+        var maxChunkMs: Int = 15_000          // hard cap, same as before
         var sampleRate: Int = 16_000
         var frameMs: Int = 30
     }
@@ -44,6 +52,12 @@ final class VADChunker {
         }
     }
 
+    /// Internal testing seam — drives the synchronous frame loop directly so
+    /// unit tests can feed deterministic buffers without spinning an AsyncStream.
+    func processForTest(_ incoming: [Float], emit: ([Float]) -> Void) {
+        process(incoming, emit: emit)
+    }
+
     private func process(_ incoming: [Float], emit: ([Float]) -> Void) {
         var stream = leftover
         stream.append(contentsOf: incoming)
@@ -63,6 +77,8 @@ final class VADChunker {
             let isSpeech = rms >= cfg.rmsThreshold
 
             if isSpeech {
+                // Speech inside the grace window cancels the pending emission
+                // — silenceMs resets to 0, buffer continues to grow.
                 inSpeech = true
                 speechMs += cfg.frameMs
                 silenceMs = 0
@@ -74,8 +90,11 @@ final class VADChunker {
                 silenceMs += cfg.frameMs
             }
 
+            // Commit when grace has elapsed on a real utterance, or on hard cap.
             let flush =
-                (inSpeech && speechMs >= cfg.minSpeechMs && silenceMs >= cfg.trailingSilenceMs)
+                (inSpeech
+                 && speechMs >= cfg.minSpeechMs
+                 && silenceMs >= cfg.endOfUtteranceGraceMs)
                 || (inSpeech && totalMs >= cfg.maxChunkMs)
 
             if flush {
