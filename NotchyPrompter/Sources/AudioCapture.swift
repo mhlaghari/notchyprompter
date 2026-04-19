@@ -10,7 +10,25 @@ import ScreenCaptureKit
 /// No virtual audio driver needed — SCK captures what the speakers would
 /// play. `excludesCurrentProcessAudio = true` keeps our own output out of
 /// the stream.
+///
+/// We also exclude macOS speech daemons (dictation, Siri TTS, CoreSpeech) via
+/// `SCContentFilter.excludingApplications` so recognition chirps and TTS
+/// playback don't bleed into the capture. See
+/// `docs/superpowers/research-2026-04-19-m13v-feedback.md` for the API
+/// reference and bundle-ID list.
 final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
+    /// macOS processes that play speech-synthesis / dictation audio and
+    /// therefore end up in the SCK system mix. Excluding them at the
+    /// content-filter level stops the leak described in issue #7.
+    private static let speechDaemonBundleIDs: Set<String> = [
+        "com.apple.speech.speechsynthesisd",                 // modern TTS daemon
+        "com.apple.speech.synthesisserver",                  // legacy TTS
+        "com.apple.SpeechRecognitionCore.speechrecognitiond", // dictation
+        "com.apple.corespeechd",                             // CoreSpeech framework
+        "com.apple.SiriTTSService",                          // Siri TTS
+        "com.apple.assistantd",                              // Siri orchestrator
+    ]
+
     private var stream: SCStream?
     private var converter: AVAudioConverter?
     private var outFormat: AVAudioFormat?
@@ -28,18 +46,34 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     }
 
     func start() async throws {
+        // Background daemons don't own on-screen windows, so request the
+        // full running-app list — otherwise speechsynthesisd / corespeechd
+        // never appear in `content.applications` and the exclusion below is
+        // a no-op.
         let content = try await SCShareableContent.excludingDesktopWindows(
-            false, onScreenWindowsOnly: true
+            false, onScreenWindowsOnly: false
         )
         guard let display = content.displays.first else {
             throw NSError(domain: "AudioCapture", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "no display found"])
         }
 
+        let excludedApps = content.applications.filter {
+            Self.speechDaemonBundleIDs.contains($0.bundleIdentifier)
+        }
+        if excludedApps.isEmpty {
+            NSLog("AudioCapture: no speech daemons found to exclude (Siri/dictation may be disabled)")
+        } else {
+            let ids = excludedApps.map(\.bundleIdentifier).joined(separator: ", ")
+            NSLog("AudioCapture: excluding %d speech daemons: %@", excludedApps.count, ids)
+        }
+
         // Audio-only filter: attach to a display but request audio capture.
+        // SCK applies `excludingApplications` to the audio mix as well as
+        // video (WWDC22 session 10155), so this gates speech-daemon output.
         let filter = SCContentFilter(
             display: display,
-            excludingApplications: [],
+            excludingApplications: excludedApps,
             exceptingWindows: []
         )
 
