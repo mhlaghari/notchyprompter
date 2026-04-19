@@ -77,3 +77,30 @@ Each lesson:
 - **Pattern:** VAD-chunked transcripts (2–5 s paragraphs) fed one-at-a-time to an LLM produce per-fragment paraphrases instead of a synthesised recap. Qwen sees 80 characters of mid-sentence text and comments on that fragment because it can't see the thread — it only ever gets one paragraph.
 - **Rule:** For summarisation modes (Note-taker), accumulate across a longer window (60–90 s or silence-triggered) and send the whole accumulation in one LLM call with a prompt that permits empty output. Per-chunk firing is correct for Teleprompter (reply latency matters) but wrong for note-taking.
 - **Context:** `Pipeline.dispatchChunk` → `handleLLM`. Transcript-primary summariser work in planning.
+
+### Wall-clock VAD debounce eats paragraphs for rapid speakers
+
+- **Pattern:** Energy-VAD + `trailingSilenceMs` flushed mid-paragraph when the speaker took a sub-second breath. Raising the threshold (400 → 900 ms) was a bandaid; 1 s breaths still split. Confirmed in live session `sessions/2026-04-19-200942.log` — "…a benchmark for how good" / "this model is at trading" is one sentence, split by the old VAD.
+- **Rule:** Treat VAD chunking as endpointing: emit on **end-of-utterance + grace window** (1200 ms default), not wall-clock silence count. Speech inside the grace resets silenceMs and keeps the buffer growing. Mechanically similar to bumping the threshold, but the mental model makes the intent explicit and the regression test (1050 ms mid-paragraph pause must not flush) guards against future "knob bumps".
+- **Context:** `VAD.swift`. Industry reference: OpenAI Realtime `server_vad` uses 500 ms; LiveKit Agents uses 500 ms + semantic EoU. Our 1200 ms is tuned for note-taking prompter (fewer longer chunks > snappy turn-taking).
+
+### ScreenCaptureKit DOES filter audio per-app — just not per-window
+
+- **Pattern:** Prior research doc claimed "no public SCK API filters by audio source; per-source capture requires a HAL audio driver". False. `SCContentFilter(display:excludingApplications:exceptingWindows:)` gates audio by application (WWDC22 session 10155 — audio policy is app-level by design). Our own filter had `excludingApplications: []` since bring-up, letting speech daemons leak.
+- **Rule:** When an external commenter contradicts existing docs, verify before dismissing. In this case the commenter (`m13v` on #7) was correct; the doc was wrong. Apple's audio policy distinguishes per-window (no API) from per-app (public API since macOS 13.0).
+- **Context:** `AudioCapture.swift`. Also: `SCShareableContent.excludingDesktopWindows(_, onScreenWindowsOnly:)` must pass `false` for `onScreenWindowsOnly` — background daemons (`speechsynthesisd`, `corespeechd`, etc.) don't own on-screen windows, so the default `true` hides them and the exclusion becomes a no-op. Post-14.4 alternative: `AudioHardwareCreateProcessTap` (cleaner, per-PID, but a full rewrite).
+
+### Bundle IDs for macOS speech daemons (for future reference)
+
+- `com.apple.speech.speechsynthesisd` — modern TTS daemon
+- `com.apple.speech.synthesisserver` — legacy TTS LaunchAgent (still present on 14/15)
+- `com.apple.SpeechRecognitionCore.speechrecognitiond` — dictation (framework name `SpeechRecognitionCore` is NOT the bundle ID)
+- `com.apple.corespeechd` — CoreSpeech framework daemon (Siri/dictation audio pipeline)
+- `com.apple.SiriTTSService` — Siri TTS
+- `com.apple.assistantd` — Siri orchestrator
+
+### User prefers concrete step-by-step over option menus
+
+- **Pattern:** Presented two merge workflows (one-at-a-time vs combined test branch) and asked the user to pick. User responded with confusion — "which ones should I merge? do I merge without testing?". Dense technical summaries also triggered pushback ("I am so confused").
+- **Rule:** For operational questions ("how do I use this?"), give ONE recommended flow with exact commands, then offer the alternative as a one-liner ("say the word if you want combined"). State the current-directory assumption explicitly in code snippets — user ran `cd NotchyPrompter && ./build.sh` from within `NotchyPrompter/` because the earlier snippet included `cd`.
+- **Context:** General communication. User is confident with concepts but prefers unambiguous operational instructions.

@@ -7,7 +7,7 @@ Python, no background servers — just a `.app`.
 
 **Requirements:** macOS 14 Sonoma or later (tested on macOS 26 Tahoe, M5 Max).
 
-**Version:** 0.2.0 — see [CHANGELOG](./CHANGELOG.md).
+**Version:** 0.3.0 — see [CHANGELOG](./CHANGELOG.md).
 
 ## How it works
 

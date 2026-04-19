@@ -80,8 +80,21 @@ Triggered by external comments on issues #7 and #8 (see `docs/superpowers/resear
   - [x] Superseded the old research doc via the new one (`research-2026-04-19-m13v-feedback.md` on main), not inline rewrite — cleaner. Old PR #14 doc can close with its branch.
   - [x] `swift build -c release` green. 39/39 tests still pass (no new unit tests — SCK is integration-only).
   - [ ] Live test: enable macOS Dictation (fn-fn), trigger recognition chirp, verify it does NOT appear in the transcript. (User action — manual verification.)
-- [ ] **Close PR #10** once grace-period PR opens. (User action — PR #16 is up, PR #10 can be closed.)
-- [ ] **Close PR #14** once speech-daemon PR opens. (User action — PR #17 is up, PR #14 can be closed.)
+- [x] **Close PR #10** — done, superseded by #16.
+- [x] **Close PR #14** — done, superseded by #17.
+
+### Review (2026-04-20)
+
+**Outcome:** Both PRs merged to `main`, both live-verified, shipped as v0.3.0.
+- `sessions/2026-04-19-200942.log` (PR #17 smoke-test, 85 s Claude-4.7-benchmarks video) — transcript is clean, no dictation chirps or `*word*` / `[bell]` artifacts.
+- `sessions/2026-04-19-201735.log` (PR #16 smoke-test, 85 s Claude-Code tutorial) — paragraph-length chunks (one 12 s chunk holds "The reason why we're starting here in VS Code… left-hand side. Because if you're in the desktop app, which we will move over to here later,"). No mid-sentence splits.
+- One ambiguous trailing chunk ("either terminal or") on the PR #16 run — likely just whatever was in the buffer when Stop was hit. Not a real failure.
+
+**Unexpected findings:**
+- The 20:09:42 session (PR #17 branch) accidentally caught the PR #8 bug red-handed — "a benchmark for how good" / "this model is at trading" split across chunks. Great A/B evidence for why #16 is needed.
+- `Info.plist` `CFBundleShortVersionString` had never been bumped past `0.1.0` — silent bug exposed while doing the 0.3.0 version bump.
+
+**Into lessons.md:** Done (wall-clock VAD → endpointing; SCK per-app audio filter does exist; user prefers concrete step-by-step).
 
 ### DON'T
 
@@ -106,32 +119,28 @@ Captured from live session review `sessions/2026-04-18-113741.log` + `.json`:
 - [ ] Keyboard shortcuts (⌘⇧L start/stop, ⌘⇧T transcript window) — works around menu-bar occlusion on notched Macs.
 - [ ] "Save" mode — transcript-only, no live overlay, no auto-summary. Lightest of the four pillars (Save / Video notes / Meeting notes / Interview assist).
 
-## Project state — 2026-04-18
+## Project state — 2026-04-20
 
 ### Branches
 
-- **`main`** — shipping branch. v0.2.0 tagged. Beyond v0.2.0: Issue 1 signing fix, mode-aware session labels, sessions moved to `~/teleprompter/sessions/`, attribution fix (PR #11), trivia filter (PR #12).
-- **`v0.2-modes-and-sessions`** — deleted after merge.
-- Other branches exist as the 5 surviving draft PRs (see below) — each lives on its own branch pushed to origin.
+- **`main`** — shipping branch. **v0.3.0 tagged today.** Beyond v0.2.0: transcript-primary Note-taker, TranscriptFilter + AttributionStripper, grace-period VAD (PR #16), speech-daemon SCK exclusion (PR #17), stable signing identity.
+- Three feature branches remain for draft PRs (#9, #13, #15). Everything else has been merged or closed.
 
-### Open pull requests (all draft unless noted)
+### Open pull requests (all draft, all awaiting manual verification)
 
-| PR | Branch | Next step |
-|---|---|---|
-| #9 | `issue-4-teleprompter-v0.3-partial` | Review prompt rewrite. Live A/B Teleprompter output vs v0.2 on the same audio. Partial — full v0.3 cadence work deferred. |
-| #10 | `issue-8-vad-tuning` | Verify paragraph coalescing on fast-speaker video. Partial — settings sliders + tuning doc deferred. |
-| #11 | merged | (done — landed in main) |
-| #12 | merged | (done — landed in main; extensions shipping now) |
-| #13 | `issue-6-ollama-model-picker` | Open Settings → Backend with Ollama selected; confirm picker lists installed models + pre-flight error path. |
-| #14 | `issue-7-dictation-crosstalk-research` | Research doc + README limitation — read, run the three diagnostic checks, merge. |
-| #15 | `issue-5-mode-change-log` | Diagnostic-only. Reproduce mid-session mode switch, inspect `/tmp/notchy-debug.log`, then ship the real fix in a follow-up. |
+| PR  | Branch                              | Next step                                                                                                   |
+| --- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| #9  | `issue-4-teleprompter-v0.3-partial` | Live A/B Teleprompter output vs v0.2 on same audio. Partial — full v0.3 cadence work deferred.              |
+| #13 | `issue-6-ollama-model-picker`       | Open Settings → Backend with Ollama selected; verify picker + pre-flight error path.                        |
+| #15 | `issue-5-mode-change-log`           | Reproduce mid-session mode switch, inspect `/tmp/notchy-debug.log`, ship real fix in follow-up.             |
 
 ### Open GitHub issues
 
-- #2 — closed by merged PR #11.
-- #3 — closed by merged PR #12 (today).
-- #4, #5, #6, #7, #8 — open, tracked by draft PRs above.
+- #2, #3, #7, #8 — closed (merged).
+- #4 — open, tracked by draft PR #9.
+- #5 — open, tracked by draft PR #15.
+- #6 — open, tracked by draft PR #13.
 
 ### Claude-harness worktrees
 
-`.claude/worktrees/agent-*` are scratch space from the earlier parallel-agent dispatch. Safe to delete once the corresponding draft PR is merged. They are not tracked by git.
+`.claude/worktrees/agent-*` are scratch space from the earlier parallel-agent dispatch. Safe to delete. They are not tracked by git.

@@ -6,6 +6,62 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-20
+
+### Changed
+- **Note-taker is transcript-primary.** The LLM no longer fires per VAD
+  chunk during the session. While a session runs, the notch shows the raw
+  Whisper transcript (via a new `FireCadence.silent` mode); on Stop,
+  `autoSummarizeOnStop` runs once over the full transcript for a
+  coherent recap. Fixes the "same point re-emitted 17 times" pattern
+  observed on long monologues (`sessions/2026-04-18-112714.log`).
+- **VAD uses a grace-period endpointing model.** Replaces wall-clock
+  `trailingSilenceMs` (400 ms) with `endOfUtteranceGraceMs` (default
+  1200 ms). A ~1 s mid-paragraph breath no longer splits paragraphs for
+  rapid speakers; sub-grace speech resumes concatenate the buffer.
+  Credit: [`m13v` on #8](https://github.com/mhlaghari/notchyprompter/issues/8).
+  Deferred alternatives (Silero v5, `AudioHardwareCreateProcessTap`,
+  semantic EoU) documented in
+  `docs/superpowers/research-2026-04-19-m13v-feedback.md`.
+
+### Added
+- **SCK speech-daemon exclusion.** `AudioCapture` now passes a set of
+  macOS speech-process bundle IDs (`speechsynthesisd`, legacy
+  `synthesisserver`, `SpeechRecognitionCore.speechrecognitiond`,
+  `corespeechd`, `SiriTTSService`, `assistantd`) to
+  `SCContentFilter(..., excludingApplications:, ...)` so dictation
+  chirps and Siri TTS no longer bleed into the capture stream. Also
+  flips `onScreenWindowsOnly: false` so the background daemons are
+  discoverable. Credit: [`m13v` on #7](https://github.com/mhlaghari/notchyprompter/issues/7).
+- **`TranscriptFilter`** — drops low-signal Whisper chunks before the
+  LLM sees them: `[MUSIC]`, `*Music*`, `thank you`-style fillers,
+  chunks under 3 tokens, pure non-speech markers (`*word*` / `[word]`
+  regardless of length). 11 unit tests.
+- **`AttributionStripper`** — removes LLM-side attribution artifacts
+  ("The speaker said…", "User claims…", "Speakers mention…") from
+  note bullets. Broadened verb whitelist to include bare infinitives
+  and more reporting verbs (`advise`, `recommend`, `transition`,
+  `introduce`, etc.). Lookahead guards possessives. 6 unit tests.
+- **`VADChunkerTests`** — 7 deterministic-Float tests encoding the
+  grace-period regression surface (39 → 46 tests total).
+- **Session log/JSON labels** — `me:` → `notes:` / `draft:` / `ai:`
+  depending on the active mode's cadence, so `.log` reads correctly
+  without cross-referencing the mode config.
+
+### Fixed
+- Closed mode-change / session crossover issues caught in live sessions:
+  `AttributionStripper` now survives possessive forms
+  ("The speaker's microphone"); plural subjects ("Speakers mention")
+  get stripped thanks to bare-infinitive coverage.
+- `Info.plist` `CFBundleShortVersionString` had never been bumped past
+  `0.1.0`; corrected to track the VERSION file.
+
+### Deprecated / closed
+- Superseded PRs closed: **#10** (VAD `trailingSilenceMs` 400 → 900 ms
+  bandaid — replaced by grace-period #16); **#14** (research-only;
+  its "no public SCK API filters by audio source" conclusion was
+  wrong — replaced by the exclusion code in #17).
+
 ## [0.2.0] — 2026-04-18
 
 ### Added
@@ -95,6 +151,7 @@ First working end-to-end build.
 - SwiftPM-based build (`./build.sh`) that produces a self-contained,
   ad-hoc-signed `.app`.
 
-[Unreleased]: https://github.com/mhlaghari/notchyprompter/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mhlaghari/notchyprompter/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mhlaghari/notchyprompter/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mhlaghari/notchyprompter/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mhlaghari/notchyprompter/releases/tag/v0.1.0
