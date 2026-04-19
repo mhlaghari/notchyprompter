@@ -72,17 +72,16 @@ Triggered by external comments on issues #7 and #8 (see `docs/superpowers/resear
   - [x] `swift test` green (39 → 46).
   - [x] `swift build -c release` green.
   - [ ] Close PR #10 with a link to the new branch; reference supersedes. (User action.)
-- [ ] **Per-app audio exclusion for speech daemons** (closes #7). Extends branch `issue-7-dictation-crosstalk-research` OR new branch — decide when branching.
-  - [ ] Add `excludedSpeechBundleIDs` constant to `AudioCapture.swift`.
-  - [ ] Switch `SCShareableContent.excludingDesktopWindows(_, onScreenWindowsOnly:)` from `true` → `false` so background daemons appear.
-  - [ ] Filter `content.applications` by the exclusion set; pass to `SCContentFilter(..., excludingApplications:, ...)`.
-  - [ ] Log which bundle IDs were found + excluded on startup (once, then shut up).
-  - [ ] Rewrite `docs/superpowers/research-2026-04-18-dictation-crosstalk.md` — correct the "no public API" conclusion, point at the new code.
-  - [ ] Keep README Known-limitations entry; reduce to caveat about user-side routing (Live Listen / aggregate devices).
-  - [ ] `swift build -c release` green.
-  - [ ] Live test: enable macOS Dictation (⌘twice), trigger a recognition chirp, verify it does NOT appear in the transcript.
-- [ ] **Close PR #10** once grace-period PR opens.
-- [ ] **Update PR #14** (or retarget) with new research verdict + code.
+- [x] **Per-app audio exclusion for speech daemons** (closes #7). Branch `issue-7-speech-daemon-exclusion`, PR #17.
+  - [x] Added `speechDaemonBundleIDs` constant to `AudioCapture.swift` (6 IDs: modern + legacy TTS, dictation, CoreSpeech, Siri TTS, assistantd).
+  - [x] Switched `SCShareableContent.excludingDesktopWindows(_, onScreenWindowsOnly:)` from `true` → `false` so background daemons appear in `.applications`.
+  - [x] Filter `content.applications` by the exclusion set; pass to `SCContentFilter(..., excludingApplications:, ...)`.
+  - [x] One-shot startup `NSLog` names the excluded daemons (or notes none found, for machines with Siri/dictation disabled).
+  - [x] Superseded the old research doc via the new one (`research-2026-04-19-m13v-feedback.md` on main), not inline rewrite — cleaner. Old PR #14 doc can close with its branch.
+  - [x] `swift build -c release` green. 39/39 tests still pass (no new unit tests — SCK is integration-only).
+  - [ ] Live test: enable macOS Dictation (fn-fn), trigger recognition chirp, verify it does NOT appear in the transcript. (User action — manual verification.)
+- [ ] **Close PR #10** once grace-period PR opens. (User action — PR #16 is up, PR #10 can be closed.)
+- [ ] **Close PR #14** once speech-daemon PR opens. (User action — PR #17 is up, PR #14 can be closed.)
 
 ### DON'T
 

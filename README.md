@@ -7,7 +7,7 @@ Python, no background servers — just a `.app`.
 
 **Requirements:** macOS 14 Sonoma or later (tested on macOS 26 Tahoe, M5 Max).
 
-**Version:** 0.1.0 — see [CHANGELOG](./CHANGELOG.md).
+**Version:** 0.2.0 — see [CHANGELOG](./CHANGELOG.md).
 
 ## How it works
 
@@ -178,8 +178,9 @@ Loose ends from the v0.1.0 working build. Contributions welcome.
       threshold that matches their audio setup.
 - [ ] Suppress duplicate transcripts (WhisperKit sometimes re-emits tail
       text when overlapping chunks land close together).
-- [ ] Detect `Hallucinated phrases` list from Whisper (`thank you for watching`,
-      `[MUSIC]`, etc.) and filter them out before calling the LLM.
+- [x] ~~Detect `Hallucinated phrases` list from Whisper (`thank you for watching`,
+      `[MUSIC]`, etc.) and filter them out before calling the LLM.~~
+      Shipped as `TranscriptFilter` (PRs #11 + #12) with `AttributionStripper` for LLM-side leaks.
 - [ ] Graceful handling when Ollama isn't running — surface a clear
       "start `ollama serve`" message in the overlay / Settings status line.
 
