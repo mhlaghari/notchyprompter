@@ -81,11 +81,21 @@ final class SessionRecorder {
     }
 
     private func appendLog(_ line: String) {
-        guard let url = liveLogURL, let data = line.data(using: .utf8) else { return }
-        if let handle = try? FileHandle(forWritingTo: url) {
+        guard let url = liveLogURL else {
+            DebugLog.write("SessionRecorder.appendLog skipped: liveLogURL is nil")
+            return
+        }
+        guard let data = line.data(using: .utf8) else {
+            DebugLog.write("SessionRecorder.appendLog skipped: UTF-8 encode failed")
+            return
+        }
+        do {
+            let handle = try FileHandle(forWritingTo: url)
             defer { try? handle.close() }
-            try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
+            try handle.seekToEnd()
+            try handle.write(contentsOf: data)
+        } catch {
+            DebugLog.write("SessionRecorder.appendLog error: \(error.localizedDescription) url=\(url.path)")
         }
     }
 
