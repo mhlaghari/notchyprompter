@@ -51,6 +51,38 @@ final class Pipeline {
         self.capture = cap
         vm.isRunning = true
         vm.setStatus("starting…")
+
+        // Ollama pre-flight: probe `/api/tags` and fail fast with a clear
+        // message if the selected model isn't installed. Claude path skips.
+        if store.backend == .ollama, let url = URL(string: store.ollamaURL) {
+            let selectedModel = store.ollamaModel
+            let probe = OllamaModelsProbe(baseURL: url)
+            Task { [weak self] in
+                do {
+                    let installed = try await probe.listInstalled()
+                    guard let self else { return }
+                    if !installed.contains(selectedModel) {
+                        self.vm.setStatus("Ollama model '\(selectedModel)' isn't installed. Run `ollama pull \(selectedModel)`.")
+                        self.stop()
+                        return
+                    }
+                    self.continueStart(capture: cap, transcriber: t, client: client)
+                } catch {
+                    // Probe failure is non-fatal; let the stream attempt
+                    // surface the real error. This covers Ollama servers that
+                    // don't expose `/api/tags` for whatever reason.
+                    self?.continueStart(capture: cap, transcriber: t, client: client)
+                }
+            }
+            return
+        }
+
+        continueStart(capture: cap, transcriber: t, client: client)
+    }
+
+    private func continueStart(capture cap: AudioCapture,
+                               transcriber t: Transcriber,
+                               client: LLMClient) {
         let activeID = store.activeModeID ?? modeStore.noteTakerBuiltIn.id
         let initial = modeStore.mode(by: activeID) ?? modeStore.noteTakerBuiltIn
         sessionRecorder.startSession(initialMode: initial)
